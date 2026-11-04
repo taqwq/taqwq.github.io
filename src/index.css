@@ -1,0 +1,379 @@
+@import "tailwindcss";
+
+/* ── Design tokens ───────────────────────────────────────────
+   黒が舞台・ジャケットが主役。アプリは色を発明しない——
+   唯一の彩色はジャケット由来の --cover-accent だけ。 */
+@theme {
+  --color-stage: #070605;        /* 暖かい真の深黒。偽黒 #0B0B0B/#111 は使わない */
+  --color-surface: #151310;      /* 検索パレット/シート/ダイアログ“だけ”の持ち上げ面 */
+  --color-rule: rgba(237, 230, 220, 0.12);      /* 情報を担う構造ヘアライン */
+  --color-rule-soft: rgba(237, 230, 220, 0.08); /* サムネの縁など、もう一段弱い線 */
+  --color-ink-1: #F2EFE9;        /* 主: 作品名（暖オフホワイト） */
+  --color-ink-2: #A8A29A;        /* 副: 作家名 */
+  --color-ink-3: #8C867C;        /* メタ: 年/枚数/追加日 */
+  --color-ink-4: #595349;        /* 装飾/非活性のみ */
+  --color-star-empty: #6A655C;   /* 空の星。黒地で 3:1 を満たす温かいグレー */
+
+  /* 一書体に統一（英語UI）。欧文=Geist、和文(盤名のフォールバックのみ)=Zen Kaku Gothic New */
+  --font-sans: "Geist", "Zen Kaku Gothic New", system-ui, -apple-system, sans-serif;
+
+  /* sm=40rem タブレット / lg=64rem PC / wide=90rem 広いPC */
+  --breakpoint-wide: 90rem;
+
+  --ease-record: cubic-bezier(0.22, 1, 0.36, 1); /* 針を落とす——決然・オーバーシュート無し */
+  --ease-wash: cubic-bezier(0.16, 1, 0.3, 1);    /* 色がにじむ */
+}
+
+/* 詳細をジャケ｜ラベルの見開きにする条件。幅だけでなく高さも要る（低い窓は縦積みのまま） */
+@custom-variant split {
+  @media (min-width: 64rem) and (min-height: 30rem) {
+    @slot;
+  }
+}
+
+/* 色として登録しておくと、←→で盤を替えたときに星や wash の色が補間される */
+@property --cover-accent {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #F2EFE9;
+}
+
+/* 部屋の寸法。--mat=壁のまわりの余白 / --seam=ジャケの継ぎ目 / --tile-min=列数を決める最小幅（スマホは3列固定）
+   --foot=棚の下の余白（safe-area は別に足す）= mat + 追加の鍵の半分 − 10。壁の終わりで鍵の中心が奥付の行の中心に来る */
+:root {
+  --cover-accent: #F2EFE9;
+  --mat: 20px;
+  --seam: 2px;
+  --tile-min: 0px;
+  --cols-fixed: 3;
+  --foot: 28px;
+}
+@media (min-width: 40rem) {
+  :root { --mat: 32px; --seam: 3px; --tile-min: 160px; --cols-fixed: 0; --foot: 42px; }
+}
+@media (min-width: 64rem) {
+  :root { --mat: 72px; --seam: 4px; --tile-min: 200px; }
+}
+@media (min-width: 90rem) {
+  :root { --mat: 88px; }
+}
+
+/* ベース要素は必ず @layer base に置く。レイヤー外に書くと、詳細度に
+   関係なく Tailwind のユーティリティ(mx-auto / p-* 等)を黙って上書き
+   してしまう(v4の cascade layers の落とし穴)。box-sizing と margin
+   リセットは Tailwind Preflight が担うので自前の * リセットは不要。 */
+@layer base {
+  html {
+    color-scheme: dark;
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+    /* Windows のスクロールバー幅を左右に同じだけ取る。モーダルでスクロールを止めても横にずれない */
+    scrollbar-gutter: stable both-edges;
+  }
+  /* 詳細は取らない。取った溝には wall-wash が届かず（fixed でも描けない）、左端に縦の段差が出る */
+  html:has(.detail) {
+    scrollbar-gutter: auto;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    html {
+      scrollbar-width: thin;
+      scrollbar-color: rgba(237, 230, 220, 0.18) transparent;
+    }
+  }
+
+  /* タッチ端末で“ウェブっぽさ”を出さない: 長押しの画像メニュー・
+     連打でのダブルタップズーム・ボタン文字の誤選択を消す */
+  button,
+  a {
+    touch-action: manipulation;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  body {
+    min-height: 100dvh;
+    background: var(--color-stage);
+    color: var(--color-ink-1);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* キーボードフォーカスは開いた盤の色で（棚では中立の明色） */
+  :where(a, button, input, textarea, [tabindex]):focus-visible {
+    outline: 2px solid var(--cover-accent);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+}
+
+/* ── 棚のタイル: マウスで指したときだけ少し明るく（拡大・枠・キャプションは出さない） ── */
+.tile {
+  transition: filter 160ms ease-out, transform 150ms ease-out;
+}
+.tile:active {
+  transform: scale(0.99);
+}
+@media (hover: hover) and (pointer: fine) {
+  .tile:hover {
+    filter: brightness(1.06);
+  }
+}
+
+/* ── 操作UIの放置フェード（src/lib/chrome.ts が <html data-chrome> を書き換える） ──
+   隠すのは opacity だけ。display/visibility/aria-hidden は使わないので、Tab と読み上げは届く。 */
+.chrome,
+.chrome-fine {
+  transition: opacity 180ms var(--ease-record);
+}
+html[data-chrome="idle"] .chrome {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 700ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+/* 隠れている最中に押された指は、離れるまで操作UIに届かせない（iOS は指を離した位置で当たり判定をし直す）。
+   止めるのは実際に隠れていたものだけ。タッチで常に見えている戻る/削除まで止めると、最初のタップが空振りする */
+html[data-chrome="waking"] .chrome {
+  pointer-events: none;
+}
+/* タッチでは、隠れた＋の場所を押しても下のジャケを開かせない。最初のタップは＋を呼び戻すだけ
+   （押せるかどうかは AddButton が data-chrome を見て決める）。覚えていた位置へ手を伸ばした人に、別の盤を開かせない */
+@media (pointer: coarse) {
+  html:is([data-chrome="idle"], [data-chrome="waking"]) .add-disc {
+    pointer-events: auto;
+  }
+}
+/* マウスの端末だけ: 戻る/削除/メモの案内文/スクロールバー/タイルの明るさも引く（タッチでは常に見せる） */
+@media (hover: hover) and (pointer: fine) {
+  html[data-chrome="idle"] .chrome-fine {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 700ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  html[data-chrome="waking"] .chrome-fine {
+    pointer-events: none;
+  }
+  html[data-chrome="idle"] {
+    scrollbar-color: transparent transparent;
+  }
+  html[data-chrome="idle"] .tile:hover {
+    filter: none;
+  }
+  html[data-chrome="idle"] .note:not(:focus):placeholder-shown::placeholder {
+    color: transparent;
+  }
+}
+
+/* ── 追加の鍵（AddButton。Shelf の壁の入れ物の最後、奥付の後に置く） ──
+   形はどこでも同じ: 四角・角丸 2px・舞台の黒・rule の縁・＋だけ。
+   スマホ/タブレット: 高さ 0 の行を sticky で窓の下に付ける。壁の途中は右下で待ち、壁の終わりで奥付の行の右端に収まる。
+   PC: 壁の右の余白に壁と同じ高さの軌道を敷き、鍵はその中で sticky。上辺は壁の一段目の上辺、左右は余白の中央。
+   壁の入れ物とその祖先（main / #app-content / body）に overflow を付けないこと。sticky が効かなくなる。 */
+.add-row {
+  position: sticky;
+  z-index: 30;
+  height: 0;
+  bottom: calc(env(safe-area-inset-bottom) + var(--foot)); /* = main の下の余白 */
+  pointer-events: none;
+}
+.add-mount {
+  position: absolute;
+  right: 0; /* 右端 = 壁の右端 */
+  top: -28px; /* 中心 = 奥付の行（20px）の中心 */
+  width: 36px;
+  height: 36px;
+  pointer-events: auto;
+}
+@media (min-width: 40rem) {
+  .add-mount { top: -30px; width: 40px; height: 40px; }
+}
+@media (min-width: 64rem) {
+  .add-row { position: absolute; top: 0; bottom: 0; left: 100%; width: var(--mat); height: auto; }
+  .add-mount { position: sticky; top: var(--mat); right: auto; margin-left: calc((var(--mat) - 40px) / 2); }
+}
+/* モーダルの間は消す（スクリムの下に二つ目の＋を残さない） */
+html:has([data-modal]) .add-mount {
+  opacity: 0;
+}
+
+.add-key {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 1px solid var(--color-rule);
+  border-radius: 2px;
+  background-color: var(--color-stage);
+  color: var(--color-ink-1);
+  transition: color 120ms ease-out, border-color 120ms ease-out, background-color 120ms ease-out,
+    transform 160ms var(--ease-record);
+}
+/* 押し幅は 44（PC で指の端末は 48）。::before は縁の内側から測る */
+.add-key::before {
+  content: '';
+  position: absolute;
+  inset: -5px;
+}
+@media (min-width: 40rem) {
+  .add-key::before { inset: -3px; }
+}
+@media (min-width: 64rem) {
+  .add-key { color: var(--color-ink-2); }
+}
+@media (min-width: 64rem) and (pointer: coarse) {
+  .add-key::before { inset: -5px; }
+}
+@media (hover: hover) and (pointer: fine) {
+  .add-key:hover { color: var(--color-ink-1); border-color: var(--color-ink-3); }
+}
+.add-key:active {
+  background-color: var(--color-surface);
+  transform: scale(0.96);
+  transition-duration: 60ms;
+}
+/* 隠れていた鍵を呼び戻すタップには、押した見た目を出さない */
+html:not([data-chrome="awake"]) .add-key:active {
+  background-color: var(--color-stage);
+  transform: none;
+}
+
+/* ＋は二本の棒。太さと長さを装置画素の整数にし、(長さ − 太さ) × 解像度 を偶数にして交点を対称に置く
+   （SVG の線は 1.25x・1.5x・2x で半端な画素ににじむ） */
+.add-plus {
+  position: absolute;
+  inset: 0;
+  --bar: 1px;
+  --len: 13px;
+}
+.add-plus::before,
+.add-plus::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  background: currentColor;
+}
+.add-plus::before { width: var(--len); height: var(--bar); }
+.add-plus::after { width: var(--bar); height: var(--len); }
+@media (min-resolution: 1.25dppx), (-webkit-min-device-pixel-ratio: 1.25) {
+  .add-plus { --bar: 0.8px; --len: 13.6px; }
+}
+@media (min-resolution: 1.5dppx), (-webkit-min-device-pixel-ratio: 1.5) {
+  .add-plus { --bar: calc(4px / 3); --len: calc(40px / 3); }
+}
+@media (min-resolution: 1.75dppx), (-webkit-min-device-pixel-ratio: 1.75) {
+  .add-plus { --bar: calc(8px / 7); --len: calc(96px / 7); }
+}
+@media (min-resolution: 2dppx), (-webkit-min-device-pixel-ratio: 2) {
+  .add-plus { --bar: 1.5px; --len: 13.5px; }
+}
+@media (min-resolution: 2.5dppx), (-webkit-min-device-pixel-ratio: 2.5) {
+  .add-plus { --bar: calc(4px / 3); --len: calc(40px / 3); }
+}
+@media (forced-colors: active) {
+  .add-plus::before,
+  .add-plus::after { forced-color-adjust: none; background: ButtonText; }
+}
+
+/* ── 詳細の見開き寸法 ── */
+.detail {
+  --V: clamp(40px, 10dvh, 88px);   /* 上下の余白 */
+  --P: clamp(300px, 24vw, 380px);  /* ラベル欄の幅 */
+  --G: clamp(48px, 5vw, 88px);     /* ジャケとラベルの間 */
+  --Sh: min(720px, 100dvh - 2 * var(--V));
+}
+.detail-group {
+  /* ジャケの一辺。窓の高さと「main の内寸(100cqi) − ラベル欄 − 間」の小さい方 */
+  --S: clamp(320px, min(100dvh - 2 * var(--V), 100cqi - var(--P) - var(--G)), 720px);
+}
+
+/* ── wall-wash: 開いた盤の色が天井からにじむ。粒子も同じ形でマスクして、矩形の縁を出さない ── */
+.wash {
+  --wash-shape: 130% 90% at 50% -5%;
+}
+@media (min-width: 64rem) and (min-height: 30rem) {
+  /* 見開きでは光の中心をジャケの真上に置く（見開き全体は中央寄せなので、ジャケ中心は 50% から (G+P)/2 左） */
+  .wash {
+    --wash-shape: calc(var(--Sh) * 1.4) calc(var(--Sh) * 1.2) at calc(50% - (var(--G) + var(--P)) / 2) -10%;
+  }
+}
+.wash-color {
+  background: radial-gradient(
+    var(--wash-shape),
+    color-mix(in srgb, var(--cover-accent) 18%, transparent) 0%,
+    transparent 62%
+  );
+}
+/* 微細な粒子。暗部のバンディングを割り、僅かなフィルム感を足す */
+.wash-grain {
+  opacity: 0.04;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 160px 160px;
+  -webkit-mask-image: radial-gradient(var(--wash-shape), #000 0%, transparent 62%);
+  mask-image: radial-gradient(var(--wash-shape), #000 0%, transparent 62%);
+}
+
+/* ── View Transitions: ルート全体のクロスフェードは切り、共有要素(ジャケット)だけを滑走させる ── */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+}
+::view-transition-group(*) {
+  animation-duration: 380ms;
+  animation-timing-function: var(--ease-record);
+}
+@media (min-width: 64rem) {
+  ::view-transition-group(*) {
+    animation-duration: 440ms;
+  }
+}
+/* ←→ で盤を替えるとき: 同じ場所で短くクロスフェード */
+html.vt-flip::view-transition-group(*) {
+  animation-duration: 240ms;
+}
+
+/* 到着時のひと息。詳細に入った瞬間の“一度だけ”のオーケストレーション */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-up {
+  animation: fadeUp 460ms var(--ease-record) backwards;
+}
+/* パレットの手順の切り替え（検索 ↔ 追加） */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.fade-in {
+  animation: fadeIn 160ms ease-out backwards;
+}
+@media (min-width: 64rem) and (min-height: 30rem) {
+  .placard.fade-up {
+    animation-delay: 120ms; /* 見開きではジャケの着地を待ってからラベルが出る */
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+  /* 放置フェードは残す（動きではなく“表示の切り替え”として、短く・等速で） */
+  .chrome,
+  .chrome-fine {
+    transition-duration: 150ms !important;
+    transition-timing-function: linear !important;
+  }
+  html[data-chrome="idle"] :is(.chrome, .chrome-fine) {
+    transition-duration: 300ms !important;
+  }
+}
