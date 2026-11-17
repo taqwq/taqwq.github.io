@@ -38,7 +38,7 @@ body{color:var(--fg);font-family:"M PLUS 1 Code",monospace;font-synthesis:none;-
 /* 中身の組み */
 .panel p{margin:0}
 .about p{font-size:14px}
-.none,.a,.y,.d,.note{color:var(--sub)}
+.none,.a,.y,.d,.note,.fav .more>span{color:var(--sub)}
 .panel .note{margin-top:18px}
 [data-mode=phone] .panel .note{margin-top:16px}
 .fav{display:flex;gap:48px;align-items:flex-start}
@@ -813,7 +813,7 @@ function build(name){
     const f=el('div','fav');
     for(const [h,list] of [['music',DATA.music],['films',DATA.films]]){
       const g=el('div'),ul=el('ul');g.append(add(el('h2',null,h),0,false));
-      list.forEach((r,i)=>{const li=el('li');li.append(el('span','t',r[0]),el('span','a',r[1]),el('span','y',r[2]));ul.append(add(li,i+1))});
+      list.forEach((r,i)=>{const li=el('li');if(/^(\.{3}|…)$/.test(r[0]))li.className='more';li.append(el('span','t',r[0]),el('span','a',r[1]),el('span','y',r[2]));ul.append(add(li,i+1))});
       g.append(ul);f.append(g);
     }
     panel.append(f);
