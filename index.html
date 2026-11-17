@@ -1,0 +1,1906 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>taq</title>
+<!-- タブの小さい絵：ラベンダーのキー1個（絵のファイルを置かずに、ここに書く） -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2' y='3' width='28' height='27' rx='7' fill='%23a993f5'/%3E%3Crect x='6' y='5' width='20' height='19' rx='5' fill='%23d6caff'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+1+Code:wght@100..700&family=M+PLUS+2:wght@500..700&display=block">
+<style>
+:root{--fg:#26232e;--sub:#716d84;--pad:32px;color-scheme:light}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:#fff}
+body{color:var(--fg);font-family:"M PLUS 1 Code",monospace;font-synthesis:none;-webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%}
+.app{position:fixed;inset:0;height:100dvh;overflow:hidden;user-select:none;-webkit-user-select:none;padding-bottom:env(safe-area-inset-bottom,0px)}
+/* キーボード。文字の層の後ろ */
+#gl{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;outline:0;-webkit-tap-highlight-color:transparent}
+
+/* 文字の層。位置は JS が決める。出す・消すは visibility だけ */
+.name{position:absolute;left:var(--pad);top:var(--pad);margin:0;font-size:14px;font-weight:500;line-height:1;white-space:pre}
+.label{position:absolute;left:0;top:0;font-size:12px;line-height:17px;white-space:nowrap;pointer-events:none;visibility:hidden}
+/* 中身の白い所を押したら閉じたいので、当たるのは文字だけにする（白い所は canvas に通す）。文字は選べる */
+.panel{position:absolute;left:0;top:0;margin:0;font-size:13px;line-height:22px;overflow-y:auto;user-select:text;-webkit-user-select:text;pointer-events:none;touch-action:pan-y;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#dcd9e5 transparent}
+.panel .r,.panel .r *{pointer-events:auto}
+/* 指で触る端末と phone の組み方：中身の箱そのものも触れるようにする（文字のすき間に指が乗っても、中で縦に動かせる）。
+   （08 で直した：iPhone で favorites の下が見切れて、動かせなかった。箱が素通しだと、すき間に触れた指がキーボードの方へ抜けていた）
+   この場合、中身の白い所を押しても閉じない。閉じるのは、中身の外の何もない所・同じキー */
+[data-mode=phone] .panel{pointer-events:auto}
+@media (hover:none){.panel{pointer-events:auto}}
+.panel[hidden]{display:none}
+@media (max-width:1199px){.panel{font-size:12px}.fav li>span{line-height:20px}}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.jp{font-size:.92em}
+
+/* 中身の組み */
+.panel p{margin:0}
+.about p{font-size:14px}
+.none,.a,.y,.d,.note{color:var(--sub)}
+.panel .note{margin-top:18px}
+[data-mode=phone] .panel .note{margin-top:16px}
+.fav{display:flex;gap:48px;align-items:flex-start}
+.fav h2{margin:0 0 14px;font:inherit;font-size:12px;line-height:17px;font-weight:400;color:var(--sub)}
+.fav ul{margin:0;padding:0;list-style:none;display:grid;grid-template-columns:max-content max-content max-content;column-gap:2.5ch}
+.fav li{display:contents}
+.fav li>span{line-height:22px;white-space:nowrap}
+.t{font-weight:500}
+.y{text-align:right;font-variant-numeric:tabular-nums}
+.late{display:grid;grid-template-columns:max-content auto;column-gap:2ch}
+.late>div{display:contents}
+.handle{font-size:14px;color:var(--fg);text-decoration:none}
+.hint{margin-left:2ch;font-size:12px;color:var(--sub)}
+/* 幅の狭い PC：2群が横に並ばないので縦に積む */
+[data-narrow="1"] .fav{flex-direction:column;gap:18px}
+/* スマホ：群を縦に積む。入りきらないときは中で縦に動かす（スクロールバーは出さない） */
+[data-mode=phone] .panel{scrollbar-width:none}
+[data-mode=phone] .panel::-webkit-scrollbar{display:none}
+[data-mode=phone] .fav{flex-direction:column;gap:16px}
+[data-mode=phone] .fav>div{width:100%}
+[data-mode=phone] .fav h2{margin-bottom:8px}
+[data-mode=phone] .fav ul{grid-template-columns:minmax(0,1fr) 11.2em auto;column-gap:10px}   /* 作者の列は幅を決めて、2群でそろえる */
+[data-mode=phone] .fav li>span{line-height:18px}
+[data-mode=phone] .fav .t{white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+[data-mode=phone] .fav .a{overflow:hidden;text-overflow:ellipsis}
+
+/* 色のキーの配色の見比べ（仮。比べ終わったら消す）：今の番号。名前と同じ行の右端（キーボードに重ならない所）。数字を押しても切り替わる */
+</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"}}</script>
+</head>
+<body>
+<main class="app">
+  <canvas id="gl" aria-hidden="true"></canvas>
+  <h1 class="name" id="name" aria-label="taq"></h1>
+  <nav class="sr" id="sr" aria-label="sections">
+    <button type="button" data-code="KeyA" aria-expanded="false">about</button>
+    <button type="button" data-code="KeyF" aria-expanded="false">favorites</button>
+    <button type="button" data-code="KeyL" aria-expanded="false">lately</button>
+    <button type="button" data-code="KeyX" aria-expanded="false">x</button>
+    <button type="button" data-code="KeyI" aria-expanded="false">instagram</button>
+    <button type="button" data-code="KeyG" aria-expanded="false">github</button>
+  </nav>
+  <div class="label" id="label" aria-hidden="true"></div>
+  <section class="panel" id="panel" hidden></section>
+  <div class="sr" id="say" aria-live="polite"></div>
+</main>
+<!-- three.js が読めないなどで下の script が動かなかったときも、名前だけは出す -->
+<script>setTimeout(function(){if(!window.T){var n=document.getElementById('name');if(n&&!n.textContent)n.textContent='taq'}},4000)</script>
+
+<script type="module">
+import * as THREE from 'three';
+import {RoundedBoxGeometry} from 'three/addons/geometries/RoundedBoxGeometry.js';
+import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
+
+const qs=new URLSearchParams(location.search);
+const $=s=>document.querySelector(s);
+const D=Math.PI/180,clamp=(v,a,b)=>Math.min(b,Math.max(a,v)),lerp=(a,b,t)=>a+(b-a)*t;
+const sstep=(a,b,x)=>{const t=clamp((x-a)/(b-a),0,1);return t*t*(3-2*t)};
+const inOut=t=>t*t*(3-2*t),outQ=t=>1-(1-t)*(1-t);
+const B3=(u,a,b)=>3*(1-u)*(1-u)*u*a+3*(1-u)*u*u*b+u*u*u;
+// cubic-bezier(x1,y1,x2,y2)。x から y を二分探索で求める
+const bez=(x1,y1,x2,y2)=>t=>{if(t<=0)return 0;if(t>=1)return 1;let a=0,b=1,u=t;for(let i=0;i<30;i++){u=(a+b)/2;if(B3(u,x1,x2)<t)a=u;else b=u}return B3(u,y1,y2)};
+const touchy=matchMedia('(hover:none)').matches;
+
+/* ---------- 設定 P（見た目と動きの数字はすべてここ。変えたら T.refit()） ---------- */
+const P=window.P={
+  // 色のキー6個：キーごとに [キーの色, 画面の言葉の色, キーの上の印字の色（なければ言葉の色）]
+  // 決まった配色（taq、2026-11-17）：10 の 3（類似色相）を、11 の 2（白を少し混ぜる）のトーンで
+  //   ・色相：343・323・303・283・263・243（a x f g i l の並び。場面の影のラベンダー 293° を中心に 20° ずつ。ピンク → 藤 → ラベンダー → 青）
+  //   ・明るさ：色相ごとの「自然な明るさ」（その色相で画面がいちばん鮮やかに出せる色の明るさを 0.2 倍に縮めて足す）に、白を 2 割混ぜた。見える明るさ .87〜.91、鮮やかさ .048
+  //   ・画面で合わせた：キーの上面の見える色が目標になるように、入れる色を直した（design/tools/pale.py → calib.js）。だから値は不ぞろいに見える。
+  //     l（いちばん淡い空色）は、入れる色の青が上限で、見える色相が 6° ほど水色の側にずれる
+  //   ・言葉と印字：同じ色相の暗い色（OKLCH の明るさ .46）
+  //   （経緯：04〜11 の候補は index-v04.html〜index-v11.html と design/decisions.md）
+  keys:{KeyA:['#e6c0d6','#7d3f67'],KeyX:['#c8b1cc','#724378'],KeyF:['#c4b7d7','#634986'],KeyG:['#babcdd','#514f8e'],KeyI:['#b8cbed','#3a5690'],KeyL:['#c1e7ff','#175d8b']},
+  legend:'#6b677e',
+  // 材質 [色, 粗さ]。metalness はどれも 0
+  // （ケースはキーより一段暗くする。白い背景の上で輪郭が出て、白いキーが浮く。試作の「白いキーと灰色の板」の関係）
+  // （軸と箱：外したときに見える。ラベンダーの十字と、ラベンダーがかった乳白の箱）
+  // （tint＝色のキー。色は配色から。3つ目は、自分でも光る強さ：光らせないと、陰の面が地面の紫の光で濁る（オレンジは茶色、ミントは灰緑に見えた）。
+  //   .12 で、陰の面と上の面の明るさの差が、白いキーと同じくらいになる）
+  mat:{key:['#f6f6f9',.62],tint:[null,.6,.12],case:['#e6e5ee',.5],well:['#cfcbe0',.8],button:['#efeef5',.35],lamp:['#c3bed8',.6],box:['#e4e0f4',.35],cross:['#a993f5',.4],inner:['#dcd8ea',.6],
+       foot:['#c9c4dc',.9],leg:['#dcd9e8',.7],port:['#bdb7d2',.6],portIn:['#9e97bb',.7]},   // 底のゴム足、たたんだ脚、奥の口
+  // 井戸の底の暗がり
+  ao:1,aoColor:'#8f84b8',aoAlpha:.35,aoTint:.5,aoBlur:3,
+  // 光
+  // （光は左奥の上から。影は手前に落ち、キーの手前の面が影になる。その影に、地面の色で紫を足す。試作の光は [-240,520,200]）
+  env:.48,sun:[-220,560,-160],sunPower:2.4,hemi:['#ffffff','#b9a8ff',.6],under:['#f3f0ff',1.5],exposure:1,
+  shadowMap:4096,shadowSizes:[4096,2048],shadowBias:-.0003,shadowNormalBias:.4,   // 影の地図：[PC, スマホやタッチの端末]。画面の大きさが決まるたびに選び直す
+  // 床の影（ぼかした面を2枚）と、床のキャップの影
+  floor:[{color:'#b79cff',blur:46,alpha:.46,dx:16,dz:22},{color:'#6a55c8',blur:9,alpha:.28,dx:4,dz:6}],
+  capShadow:{color:'#6a55c8',alpha:.35,size:26,fade:40,grow:30},
+  // ケース
+  caseR:6,caseBevel:1,wellPad:1.2,wellR:2.5,wellBevel:.6,wellY:-4.2,
+  // キーの形。ring は [h に掛ける, 足す, 内側への寄せ, 角の丸み]
+  ring:[[0,0,0,1.6],[.55,0,1,1.9],[1,-.8,1.9,2.2],[1,-.3,2.1,2.3],[1,-.07,2.35,2.4],[1,0,2.65,2.5]],
+  gap:.95,back:.6,seg:6,dish:.12,dishEdge:6,sculpt:1,flatH:7.9,capsLow:4.6,capY:-.4,wall:1.2,
+  rows:[[9,7],[8.6,5],[7.9,2],[7.5,0],[7.7,-3],[7.7,-6]],   // 段ごとの [高さ h, 傾き°]
+  // 印字
+  // 印字の書体は M PLUS 2（画面の文字 M PLUS 1 Code と同じ系統のゴシック）。等幅だと「コードの文字」に見えたので替えた。
+  // ほかの候補は URL の ?legend=code|outfit|barlow|round で見比べられる（下の LEGENDS。書体と太さだけを替える）
+  // 置き方（px。1マス cell）：1文字 one・矢印 arrow は中央（oneDy 下へ）。2段は素の文字 two を中心から twoGap 下、Shift の文字 twoS を twoGap 上（不透明度 shiftA）。
+  // 言葉は word。幅 1u のキーは下の中央、幅の広いキーは左半分なら左下・右半分なら右下の隅（端から mx、下端から mb が文字の下端）
+  font:{family:'M PLUS 2',weight:500,one:80,oneDy:4,arrow:74,two:54,twoS:44,twoGap:32,shiftA:.6,word:34,mx:28,mb:30,cell:192},
+  // カメラ。phone の組み方（キーボードを下に大きく、横に動かして見る）は、幅が phoneBelow より狭くて、縦長か正方形のときだけ。
+  // （横向きのスマホ（667×375 など）を phone で組むと、キーボードが画面の高さをほぼ全部使い、中身の入る高さが 0 になった。横長なら pc で組む）
+  phoneBelow:700,pad:[32,20],labelH:17,
+  // narrow：この幅より狭い PC は favorites を縦に積む。short：この高さより低い画面（横向きのスマホなど）も縦に積む
+  // （低い画面では、中身とキーボードが縦に入りきらない。縦に積むと中身の幅が半分になって、キーボードが右へよけられる。積まないと、下へ押し出されて見えなくなった）
+  pc:{fov:20,el:54,yaw:-5,frac:[.86,.68],maxH:.5,bottom:[64,.083],sway:[1.6,.8],dead:.12,follow:380,back:200,narrow:780,short:560},
+  // （bottom を小さくして、キーボードを画面の下いっぱいに寄せる。上の白が広がって、375×812 でも favorites が中で動かさずに入る）
+  phone:{fov:24,el:62,yaw:0,u:[9.4,38,48],bottom:24,start:6.25,edge:[4,12],hitY:7.7,near:.62},
+  // キーのばね（ms と mm）
+  spring:{down:[.03,.3],up:[.012,.15],wideDown:.0225,wideUp:.009,travel:3.3,latch:1.5,armed:.6,hover:.4},
+  // パン（px と ms）
+  pan:{slop:8,vel:80,vmax:3,tau:325,stop:.02,rubber:.35,max:28,k:.004,c:.12},
+  // 時間（ms）
+  time:{hover:120,again:300,show:50,row:22,opened:600,second:250,tap:120,watch:3000,sr:120},
+  // 開いたときの動き。letters：名前の1文字目・2文字目・3文字目が出る ms（4文字目からは同じ間隔）。キーボードのキーは打たない
+  intro:{fade:420,fadeEase:[.2,.7,.3,1],letters:[220,350,480],pan:650,panFrom:24,panEase:[.25,.8,.25,1],end:720,
+         view:{yaw:-10,el:4,zoom:.94,ms:700,ease:[.2,.7,.2,1]}},   // pc だけ：ホームから yaw −10°、el +4°、zoom .94 で始めて、ホームへ
+  // 視点（° と ms と px）。回す：1px で orbit°。慣性：直前 vel ms の速さ（上限 vmax °/ms）を exp(−t/tau) で減らし、stop °/ms で止める
+  // zoom：[pc, phone] の範囲。wheel：deltaY 1 あたり。wheelTau：寄るなめらかさ。home：戻る ms。again：2回押しの ms。key：キーで回す °/ms
+  // keyZoom：PageUp/Down の速さ。under：End で見る el。pinchEl：2本指の上下 1px の °。tol：ホームの判定 [°, zoom, mm, 画面の上でのずらし px]。shade：床の影を消す el [0, 1]
+  // （メインの調整：vmax を .84 → .3。速く払っても 80° ほどで止まる。flingEl：縦の惰性は半分。
+  //   矢印キーは、keyDelay ms 押し続けてから keyRamp ms かけて回り始める＝軽く叩いただけでは回らない。keyTau：キーを離したあとの惰性）
+  // margin：注視点の動ける範囲（ケースと床のキャップの外へ mm）。slop は右ボタンで動かしたとみなす距離（右クリックのメニューを出さない）も兼ねる
+  // keep：画面の上でずらしても（ox・oy）、キーボードが画面の中にこれだけは残る（px）
+  view:{slop:6,orbit:.28,vel:80,tau:280,stop:.002,vmax:.3,flingEl:.5,el:[-78,88],zoom:{pc:[.5,3.2],phone:[.42,2.6]},margin:60,keep:120,
+        wheel:.0016,wheelTau:110,home:520,homeEase:[.3,.7,.2,1],again:350,key:.085,keyDelay:140,keyRamp:220,keyTau:150,keyZoom:.0011,under:-58,pinchEl:.25,
+        tol:[.4,.008,1,.5],shade:[3,14]},
+  // つかんだ ↑ のキャップ（mm と ms）。desk/over：運ぶ高さ（机から／ケースの上面から）。grow：ケースの上とみなす広がり。hTau：高さの切り替わり
+  // w：位置のばね（臨界減衰、/ms）。flip：表に返す ms。tilt：[1 mm/ms あたりの °, 最大 °, 時定数 ms]。box：動ける範囲 [x−, x+, z−, z+]（ケースの縁から）
+  // snap：軸に吸いつく距離（u）。above：吸いついたときの高さ（はまる位置から）。seat：押し込む ms。vel：投げる速さを見る ms。vmax：速さの上限
+  // lead：着地点の先読み ms。fly：[最短 ms, 1mm あたり, 最長]。apex：[足す mm, 速さ 1 あたり]
+  // flipV：裏返す速さ。spin：[°, 速さ 1 あたり °]。bounce：[mm, ms]。still：動きを減らす設定で置く ms。dip：はまったときの沈み
+  // 着地点は box の中ならどこでもよい（キーボードの上・奥も）。高さは真下の面：foot（足元の四角の半分 mm）に重なるキーのいちばん高い上面、
+  // キーがなければケースの上面（0）、ケースの外は床。stem：むき出しの ↑ の軸の高さ
+  carry:{desk:20,over:30,grow:20,hTau:90,w:.03,flip:160,tilt:[14,16,70],box:[-110,150,-90,110],snap:.62,above:7,seat:90,yawTau:90,
+         vel:80,vmax:1.4,lead:170,fly:[240,1.1,560],apex:[5,8],flipV:.28,spin:[30,50],bounce:[1.2,90],still:120,dip:.6,foot:8,stem:4.8},
+  // 押した所に合わせたキーの傾き（°）：[ふつう, 幅 2u 以上]。沈みの深さに比例
+  tilt:[1.8,1],
+  // 細部：スイッチの箱 [幅, 上の y]、底の縁の丸み、合わせ目の溝 [y, 深さ, 幅]、ゴム足、たたんだ脚、奥の口、丸いボタンの沈み、ランプ [色, 強さ]
+  model:{boxW:14,boxTop:.8,bottomR:1.2,seam:[-6,.45,.5],foot:{size:[26,9],h:.9,at:[24,12]},leg:{size:[38,16],r:3,at:[60,16]},
+         port:{y:-8,outer:[16,7,2],inner:[8.5,2.8,1]},button:.9,lamp:['#59eab6',1.6]},
+  // ↑ のキャップ
+  cap:{place:[34,8],yaw:23,wobble:[-5,4,-2,6],on:520,seat:[60,2],peak:34,peakAt:.42,turn:[.1,.75],ease:[.3,0,.2,1],   // peak：裏返しのまま → キーの上を通るので、少し高めに
+       off:[70,380,90],lift:9,arc:14,bounce:1.2,still:120},
+  // 中身の出し方「紙」（px）：名前の下端 + top にラベル、gap あけて中身。hover：カーソルを乗せたときの言葉の不透明度
+  // 中身の高さの上限：pc は H − 上端 − pad。phone はホームの向きでのキーボードの上端 − dodge.m − 上端
+  // zone：pc のキーボードの大きさ。ホームの向きで、キーボードの上端が 名前の下端 + top + labelH + gap + zone [ふつう, 縦に積むとき] + dodge.m より下に来る
+  paper:{top:20,gap:14,hover:.45,zone:[232,402]},
+  // よける（px と ms）：中身（ラベルと中身の四角）を m [pc, phone] 広げた四角とキーボードが重なったときだけ、下か右へ動かす。
+  // m は、ホームの向きでの文字とキーボードのすき間でもある（pc は fit がこのぶんの白を残し、phone は中身の高さの上限をこのぶん手前で止める）。
+  // だから、ホームの向きでは、どの中身を開いてもよけない。
+  // 動かしたあと、キーボードの下端・右端が画面の端から edge 以内なら使える。ms かけて動かす（曲線は view.homeEase）
+  dodge:{m:[24,12],edge:8,ms:320}
+};
+
+/* ---------- 中身 ---------- */
+const empty=()=>({name:'taq',about:[],music:[],films:[],note:[],lately:[],links:{}});
+let DATA=empty();
+function parse(txt){
+  const d=empty();d.name='';let sec=null;
+  for(const raw of txt.split(/\r?\n/)){
+    const line=raw.trim();if(!line||line[0]==='#')continue;
+    const m=/^\[([a-z]+)\]$/.exec(line);if(m){sec=m[1];continue}
+    const f=line.split(/\s*\|\s*/);
+    if(sec==='name'){if(!d.name)d.name=line}
+    else if(sec==='about')d.about.push(line);
+    else if(sec==='note')d.note.push(line);
+    else if(sec==='music'||sec==='films')d[sec].push([f[0]||'',f[1]||'',f[2]||'']);
+    else if(sec==='lately')d.lately.push([f[0]||'',f.slice(1).join(' | ')]);
+    else if(sec==='links'&&f[0])d.links[f[0]]={id:f[1]||'',url:f[2]||''};
+  }
+  if(!d.name)d.name='taq';
+  return d;
+}
+const demo=d=>{for(const n of ['x','instagram','github'])d.links[n]={id:'example',url:'https://example.com/'};return d};
+// 文字は textContent で入れる。日本語の並びは span.jp で包む
+function put(e,s){
+  const re=/[　-ヿ㐀-鿿＀-￯]+/g;let i=0,m;
+  while((m=re.exec(s))){if(m.index>i)e.append(s.slice(i,m.index));const j=document.createElement('span');j.className='jp';j.textContent=m[0];e.append(j);i=m.index+m[0].length}
+  if(i<s.length)e.append(s.slice(i));
+  return e;
+}
+const el=(tag,cls,txt)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)put(e,txt);return e};
+
+/* ---------- 配列（taq の G PRO、日本語配列。mm、U=19.05） ---------- */
+// [code, 印字, 幅u]。数字だけの要素は隙間(u)。配列の印字は [下（素）, 上（Shift）]
+const U=19.05,G=2/3,NAV=.35,L=s=>[...s].map(c=>['Key'+c,c]);
+const ROWS=[
+ {z:0,   keys:[['Escape','esc'],G,['F1','f1'],['F2','f2'],['F3','f3'],['F4','f4'],G,['F5','f5'],['F6','f6'],['F7','f7'],['F8','f8'],G,['F9','f9'],['F10','f10'],['F11','f11'],['F12','f12'],NAV,['PrintScreen','prt sc'],['ScrollLock','scr lk'],['Pause','pause']]},
+ {z:1.3, keys:[['Backquote','h/z'],['Digit1',['1','!']],['Digit2',['2','"']],['Digit3',['3','#']],['Digit4',['4','$']],['Digit5',['5','%']],['Digit6',['6','&']],['Digit7',['7',"'"]],['Digit8',['8','(']],['Digit9',['9',')']],['Digit0',['0','']],['Minus',['-','=']],['Equal',['^','~']],['IntlYen',['¥','|']],['Backspace','back'],NAV,['Insert','ins'],['Home','home'],['PageUp','pg up']]},
+ {z:2.3, keys:[['Tab','tab',1.5],...L('QWERTYUIOP'),['BracketLeft',['@','`']],['BracketRight',['[','{']],['Enter','enter',1.5],NAV,['Delete','del'],['End','end'],['PageDown','pg dn']]},
+ {z:3.3, keys:[['CapsLock','caps',1.75],...L('ASDFGHJKL'),['Semicolon',[';','+']],['Quote',[':','*']],['Backslash',[']','}']]]},
+ {z:4.3, keys:[['ShiftLeft','shift',2.25],...L('ZXCVBNM'),['Comma',[',','<']],['Period',['.','>']],['Slash',['/','?']],['IntlRo',['\\','_']],['ShiftRight','shift',1.75],NAV+1,['ArrowUp','↑']]},
+ {z:5.3, keys:[['ControlLeft','ctrl',1.5],['MetaLeft','win',1.25],['AltLeft','alt',1.25],['NonConvert','muhen'],['Space','',3.75],['Convert','henkan'],['KanaMode','kana',1.25],['Fn','fn',1.25],['ContextMenu','menu',1.25],['ControlRight','ctrl',1.5],NAV,['ArrowLeft','←'],['ArrowDown','↓'],['ArrowRight','→']]}
+];
+const CW=361,CD=153,CX0=-CW/2,CZ0=-CD/2,KX0=-18.35*U/2,KZ0=CZ0+26.5,FLOOR=-16;
+const wx=u=>KX0+u*U,wz=u=>KZ0+u*U;
+const CONTENT={KeyA:'about',KeyF:'favorites',KeyL:'lately',KeyX:'x',KeyI:'instagram',KeyG:'github'};
+const KEY_OF=Object.fromEntries(Object.entries(CONTENT).map(([k,v])=>[v,k]));
+// 色のキー。見た目はキーごとに P.keys から
+const TINT=new Set(Object.keys(CONTENT));
+// 色のキーの、キーの色・印字の色
+const capOf=c=>P.keys[c][0],legOf=c=>P.keys[c][2]||P.keys[c][1];
+// インク色（言葉の色）：Escape は開いている中身のキー、Enter は開ける SNS のキー（どちらも、開いている中身のキー）の色
+const inkOf=code=>{const c=code==='Escape'||code==='Enter'?KEY_OF[open]:code,p=P.keys[c];return p?p[1]:P.legend};
+const SNS=new Set(['x','instagram','github']);
+const LIST=[],KEYS={};
+ROWS.forEach((r,ri)=>{let x=0;for(const e of r.keys){
+  if(typeof e==='number'){x+=e;continue}
+  const [code,label,w=1]=e,kind=code==='Enter'?'enter':code==='CapsLock'?'caps':'rect';
+  const k={code,label,w,row:ri,kind,y:0,v:0,to:0,dn:false,src:new Set(),latch:false,tapped:false,
+    rects:kind==='enter'?[[13.5,2.3,15,3.3],[13.75,3.3,15,4.3]]:[[x,r.z,x+w,r.z+1]],
+    cu:kind==='enter'?14.25:kind==='caps'?x+.75:x+w/2,cv:kind==='enter'?2.8:r.z+.5};
+  LIST.push(k);KEYS[code]=k;x+=w}});
+const UP=KEYS.ArrowUp,CAPX=-CX0+P.cap.place[0],CAPZ=wz(UP.cv)+P.cap.place[1];
+
+/* ---------- 場面（光・材質） ---------- */
+const canvas=$('#gl'),app=$('.app'),root=document.documentElement,nameEl=$('#name'),label=$('#label'),panel=$('#panel'),sr=$('#sr'),say=$('#say');
+let renderer;
+try{renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:true})}
+catch(e){nameEl.textContent='taq';throw e}   // WebGL が使えない：名前だけ出して止まる（代わりの表示は、まだ作っていない）
+renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));
+renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.toneMapping=THREE.NeutralToneMapping;
+const scene=new THREE.Scene();
+scene.environment=new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(),.04).texture;
+const sun=new THREE.DirectionalLight(0xffffff,1);sun.castShadow=true;scene.add(sun,sun.target);
+const hemi=new THREE.HemisphereLight();scene.add(hemi);
+// 下からの光（影なし）。裏返して底を見たとき、暗くつぶれないように。上の面には当たらない
+const underLight=new THREE.DirectionalLight(0xffffff,1);underLight.position.set(40,-600,160);scene.add(underLight,underLight.target);
+const std=()=>new THREE.MeshStandardMaterial({metalness:0});
+const M={key:std(),case:std(),well:std(),button:std(),lamp:std(),box:std(),cross:std(),inner:std(),foot:std(),leg:std(),port:std(),portIn:std()};
+for(const c of TINT)M[c]=std();   // 色のキーは、キーごとに材質を持つ
+M.inner.side=THREE.DoubleSide;
+// 面のすぐ外に貼る薄い面は、奥行きを少し手前にずらす（ちらつかないように）
+for(const n of ['lamp','leg','port','portIn']){M[n].polygonOffset=true;M[n].polygonOffsetFactor=-1;M[n].polygonOffsetUnits=-2}
+// ランプの小窓は2つで別の材質（見に来た人の CapsLock と ScrollLock で光る）
+const LAMPS=[0,1].map(()=>{const m=std();m.polygonOffset=true;m.polygonOffsetFactor=-1;return m});
+let lampOn=[false,false];
+function lampLook(){LAMPS.forEach((m,i)=>{m.color.set(P.mat.lamp[0]);m.roughness=P.mat.lamp[1];m.emissive.set(lampOn[i]?P.model.lamp[0]:'#000');m.emissiveIntensity=lampOn[i]?P.model.lamp[1]:1})}
+const V=new THREE.Vector3(),V2=THREE.Vector2,V3=THREE.Vector3,YA=new V3(0,1,0);
+// 影のカメラは、ケースと床のキャップ（運んでいる高さも）が入る範囲に合わせる
+// （キャップを運べる範囲 P.carry.box まで入れる。外だと、キャップに影が付かず、境目で明るさが変わる）
+const SHADOW_BOX=[];{const B=P.carry.box;for(const x of [CX0+B[0],-CX0+B[1]])for(const y of [FLOOR-1,48])for(const z of [CZ0+B[2],-CZ0+B[3]])SHADOW_BOX.push(new V3(x,y,z))}
+let sunYaw=0;   // 光を回した角度（° 。カメラの横の角度 − ホームの横の角度）
+function applyLook(){
+  for(const n in M){const m=P.mat[n]||P.mat.tint;if(P.mat[n]&&n!=='well')M[n].color.set(m[0]);M[n].roughness=m[1]}
+  tintLook();
+  M.well.color.set('#fff');lampLook();
+  scene.environmentIntensity=P.env;renderer.toneMappingExposure=P.exposure;
+  sun.intensity=P.sunPower;
+  hemi.color.set(P.hemi[0]);hemi.groundColor.set(P.hemi[1]);hemi.intensity=P.hemi[2];
+  underLight.color.set(P.under[0]);underLight.intensity=P.under[1];
+  const s=sun.shadow;s.bias=P.shadowBias;s.normalBias=P.shadowNormalBias;
+  if(s.mapSize.x!==P.shadowMap){s.mapSize.set(P.shadowMap,P.shadowMap);if(s.map){s.map.dispose();s.map=null}}
+  aimSun();
+}
+// 色のキーの材質を、今の案に合わせる
+function tintLook(){for(const c of TINT){const m=M[c];m.color.set(capOf(c));m.roughness=P.mat.tint[1];m.emissive.copy(m.color);m.emissiveIntensity=P.mat.tint[2]}}
+// 光はカメラの横の角度についてくる（回転台に載せたのと同じ）：平行光と床の影2枚のずれを y 軸まわりに回し、影のカメラの範囲を取り直す
+function aimSun(){
+  const a=sunYaw*D,s=sun.shadow;
+  sun.position.set(...P.sun).applyAxisAngle(YA,a);sun.target.position.set(0,0,0);
+  shades.forEach((m,i)=>{const f=P.floor[i];V.set(f.dx,0,f.dz).applyAxisAngle(YA,a);m.position.set(V.x,FLOOR+.05,V.z)});
+  const m=new THREE.Matrix4().lookAt(sun.position,sun.target.position,new V3(0,1,0)).setPosition(sun.position).invert();
+  let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9,z0=1e9,z1=-1e9;
+  for(const p of SHADOW_BOX){V.copy(p).applyMatrix4(m);x0=Math.min(x0,V.x);x1=Math.max(x1,V.x);y0=Math.min(y0,V.y);y1=Math.max(y1,V.y);z0=Math.min(z0,V.z);z1=Math.max(z1,V.z)}
+  Object.assign(s.camera,{left:x0,right:x1,bottom:y0,top:y1,near:Math.max(1,-z1-10),far:-z0+10});s.camera.updateProjectionMatrix();
+}
+
+/* ---------- 形（ケース、キー、軸、キャップ） ---------- */
+// 平面の多角形は [x,z] の並び。外向きの法線は向き（符号つき面積）から決める
+const area=p=>{let a=0;for(let i=0;i<p.length;i++){const q=p[(i+1)%p.length];a+=p[i][0]*q[1]-q[0]*p[i][1]}return a};
+const nrm=(a,b,s)=>{const dx=b[0]-a[0],dz=b[1]-a[1],l=Math.hypot(dx,dz)||1;return s>0?[dz/l,-dx/l]:[-dz/l,dx/l]};
+const rect=(x0,z0,x1,z1)=>[[x0,z0],[x1,z0],[x1,z1],[x0,z1]];
+// 直角の多角形を内側へ d 寄せる（d が負なら外へ広げる）
+function inset(p,d){const s=Math.sign(area(p)),n=p.length;return p.map((v,i)=>{const a=nrm(p[(i+n-1)%n],v,s),b=nrm(v,p[(i+1)%n],s);return[v[0]-(a[0]+b[0])*d,v[1]-(a[1]+b[1])*d]})}
+// 角を半径 r の弧（S 分割）にする。点ごとに外向きの法線を付ける。どの輪も点の数が同じになる
+function roundPoly(p,r,S){
+  const s=Math.sign(area(p)),n=p.length,out=[];
+  for(let i=0;i<n;i++){
+    const v=p[i],a=p[(i+n-1)%n],b=p[(i+1)%n];
+    let ix=v[0]-a[0],iz=v[1]-a[1],l=Math.hypot(ix,iz);ix/=l;iz/=l;
+    let ox=b[0]-v[0],oz=b[1]-v[1];l=Math.hypot(ox,oz);ox/=l;oz/=l;
+    const cx=v[0]+(ox-ix)*r,cz=v[1]+(oz-iz)*r,ni=nrm(a,v,s),sg=(-ox*ni[0]-oz*ni[1])>=0?1:-1;
+    const f0=Math.atan2(-oz,-ox);let df=Math.atan2(iz,ix)-f0;
+    while(df>Math.PI)df-=2*Math.PI;while(df<=-Math.PI)df+=2*Math.PI;
+    for(let j=0;j<=S;j++){const f=f0+df*j/S,c=Math.cos(f),sn=Math.sin(f);out.push({x:cx+r*c,z:cz+r*sn,nx:sg*c,nz:sg*sn})}
+  }
+  return out;
+}
+const sub=(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]],cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+const vtx=(pos,i)=>[pos[i*3],pos[i*3+1],pos[i*3+2]];
+// 三角形を1つ。法線の y の向きを sg に合わせる
+function tri(pos,idx,a,b,c,sg){const n=cross(sub(vtx(pos,b),vtx(pos,a)),sub(vtx(pos,c),vtx(pos,a)));if(n[1]*sg<0)idx.push(a,c,b);else idx.push(a,b,c)}
+// 輪を積んでつなぐ。頂点は共有する（なめらかな法線）。向きは want：out/in（横）、up/down（縦）
+function loft(pos,idx,rs,want){
+  const N=rs[0].length,b0=pos.length/3;
+  for(const r of rs)for(const p of r)pos.push(p[0],p[1],p[2]);
+  let cx=0,cz=0;for(const p of rs[0]){cx+=p[0];cz+=p[2]}cx/=N;cz/=N;
+  const a=vtx(pos,b0),n=cross(sub(vtx(pos,b0+1),a),sub(vtx(pos,b0+N+1),a)),rad=n[0]*(a[0]-cx)+n[2]*(a[2]-cz);
+  const good=want==='out'?rad>0:want==='in'?rad<0:want==='up'?n[1]>0:n[1]<0;
+  for(let k=0;k<rs.length-1;k++)for(let i=0;i<N;i++){
+    const i0=b0+k*N+i,i1=b0+k*N+(i+1)%N,j0=i0+N,j1=i1+N;
+    if(good)idx.push(i0,i1,j1,i0,j1,j0);else idx.push(i0,j1,i1,i0,j0,j1);
+  }
+}
+function mk(pos,idx,nor){
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setIndex(idx);
+  if(nor)g.setAttribute('normal',new THREE.Float32BufferAttribute(nor,3));else g.computeVertexNormals();
+  return g;
+}
+
+// ケース：外の縁（丸み 1mm）と井戸の穴（丸み 0.6mm）の壁を、法線つきで作る。上面は穴あきの平面
+const OUT=roundPoly(rect(CX0,CZ0,-CX0,-CZ0),P.caseR,10);
+const span=codes=>{const r=codes.map(c=>KEYS[c].rects[0]);return[Math.min(...r.map(q=>q[0])),Math.min(...r.map(q=>q[1])),Math.max(...r.map(q=>q[2])),Math.max(...r.map(q=>q[3]))]};
+const toMM=([a,b,c,d])=>rect(wx(a),wz(b),wx(c),wz(d));
+const WELL_POLYS=[span(['Escape']),span(['F1','F4']),span(['F5','F8']),span(['F9','F12']),span(['PrintScreen','Pause']),[0,1.3,15,6.3],[15.35,1.3,18.35,3.3]].map(toMM)
+  .concat([[[16.35,4.3],[17.35,4.3],[17.35,5.3],[18.35,5.3],[18.35,6.3],[15.35,6.3],[15.35,5.3],[16.35,5.3]].map(([a,b])=>[wx(a),wz(b)])]);
+let WELLS=[];
+// extra：壁の下の行（[内への寄せ, y, 外向きの成分, 上向きの成分]）。なければ y=yb まで真っすぐ
+function rim(o,pts,hole,rb,yb,K,extra){
+  const m=hole?-1:1,N=pts.length,b0=o.pos.length/3,rows=[];
+  for(let k=0;k<=K;k++){const t=k/K*Math.PI/2;rows.push([rb*(1-Math.sin(t)),-rb*(1-Math.cos(t)),Math.sin(t),Math.cos(t)])}
+  if(extra)rows.push(...extra);else rows.push([0,yb,1,0]);
+  for(const [d,y,s,c] of rows)for(const p of pts){const mx=p.nx*m,mz=p.nz*m;o.pos.push(p.x-mx*d,y,p.z-mz*d);o.nor.push(mx*s,c,mz*s)}
+  // 向き：壁の帯（上の丸みのすぐ下）で、面の法線と頂点の法線を比べる
+  const a=b0+K*N,n=cross(sub(vtx(o.pos,a+1),vtx(o.pos,a)),sub(vtx(o.pos,a+N+1),vtx(o.pos,a)));
+  const good=n[0]*o.nor[a*3]+n[1]*o.nor[a*3+1]+n[2]*o.nor[a*3+2]>0;
+  for(let k=0;k<rows.length-1;k++)for(let i=0;i<N;i++){
+    const i0=b0+k*N+i,i1=b0+k*N+(i+1)%N,j0=i0+N,j1=i1+N;
+    if(good)o.idx.push(i0,i1,j1,i0,j1,j0);else o.idx.push(i0,j1,i1,i0,j0,j1);
+  }
+}
+const board=new THREE.Group();scene.add(board);
+const caseWall=new THREE.Mesh(undefined,M.case),caseTop=new THREE.Mesh(undefined,M.case),wellMesh=new THREE.Mesh(undefined,M.well),caseBot=new THREE.Mesh(undefined,M.case);
+for(const m of [caseWall,caseTop,wellMesh]){m.castShadow=m.receiveShadow=true;board.add(m)}
+caseBot.receiveShadow=true;board.add(caseBot);
+const under=new THREE.Group();board.add(under);   // 底と奥の細部（ゴム足、たたんだ脚、奥の口）
+const slot=(w,h,r,S=6)=>roundPoly(rect(-w/2,-h/2,w/2,h/2),r,S);
+// 底の細部。下向きの薄い面は、底の面のすぐ下に貼る
+function buildUnder(){
+  for(const c of [...under.children]){c.geometry.dispose();under.remove(c)}
+  const B=P.model,add=(g,mat,x,y,z)=>{const m=new THREE.Mesh(g,mat);m.position.set(x,y,z);m.receiveShadow=true;under.add(m);return m};
+  const flat=(w,h,r,mat,x,z)=>{
+    const g=new THREE.ShapeGeometry(new THREE.Shape(slot(w,h,r).map(p=>new V2(p.x,p.z))));g.deleteAttribute('uv');
+    g.rotateX(Math.PI/2);return add(g,mat,x,FLOOR-.04,z)};   // (x, y) → (x, 0, y)。法線は下向き
+  // ゴム足：角丸の長円を、厚さ h で底から出す
+  const F=B.foot,[fw,fh]=F.size,fb=Math.min(.3,F.h/3);
+  const fg=new THREE.ExtrudeGeometry(new THREE.Shape(slot(fw-2*fb,fh-2*fb,fh/2-fb-.01,8).map(p=>new V2(p.x,p.z))),{depth:F.h-2*fb,bevelEnabled:true,bevelThickness:fb,bevelSize:fb,bevelSegments:2});
+  fg.rotateX(Math.PI/2);fg.computeBoundingBox();fg.translate(0,FLOOR+.05-fg.boundingBox.max.y,0);fg.deleteAttribute('uv');
+  const fx=-CX0-F.at[0],fz=-CZ0-F.at[1];
+  for(const [x,z] of [[-fx,-fz],[fx,-fz],[-fx,fz],[fx,fz],[0,fz]])add(fg,M.foot,x,0,z).castShadow=true;
+  // たたんだ脚（奥の左右）
+  const L=B.leg;for(const s of [-1,1])flat(L.size[0],L.size[1],L.r,M.leg,s*(-CX0-L.at[0]),CZ0+L.at[1]);
+  // 奥の口：奥の面のすぐ外に、角丸を2枚
+  const port=([w,h,r],mat,dz)=>{const g=new THREE.ShapeGeometry(new THREE.Shape(slot(w,h,r).map(p=>new V2(p.x,p.z))));g.deleteAttribute('uv');g.rotateY(Math.PI);add(g,mat,0,B.port.y,CZ0-dz)};
+  port(B.port.outer,M.port,.06);port(B.port.inner,M.portIn,.12);
+}
+function buildCase(){
+  WELLS=WELL_POLYS.map(p=>roundPoly(inset(p,-P.wellPad),P.wellR,5));
+  const o={pos:[],nor:[],idx:[]};
+  // 外の壁：上の丸み → 合わせ目の溝（角を立てるため、同じ点を法線を替えて2回）→ 底の丸み
+  const B=P.model,rb=B.bottomR,[sy,sd,sw]=B.seam,y1=sy+sw/2,y2=sy-sw/2;
+  const ext=[[0,y1,1,0],[0,y1,0,-1],[sd,y1,0,-1],[sd,y1,1,0],[sd,y2,1,0],[sd,y2,0,1],[0,y2,0,1],[0,y2,1,0]];
+  for(let k=0;k<=6;k++){const t=k/6*Math.PI/2;ext.push([rb*(1-Math.cos(t)),FLOOR+rb*(1-Math.sin(t)),Math.cos(t),-Math.sin(t)])}
+  rim(o,OUT,false,P.caseBevel,FLOOR,6,ext);
+  // 底のふた（下向き）
+  const bg=new THREE.ShapeGeometry(new THREE.Shape(OUT.map(p=>new V2(p.x-p.nx*rb,p.z-p.nz*rb))));bg.rotateX(Math.PI/2);bg.translate(0,FLOOR,0);bg.deleteAttribute('uv');
+  if(caseBot.geometry)caseBot.geometry.dispose();caseBot.geometry=bg;
+  buildUnder();
+  for(const w of WELLS)rim(o,w,true,P.wellBevel,P.wellY-.05,4);
+  const top=(pts,hole,rb)=>pts.map(p=>{const m=hole?-1:1;return new V2(p.x-p.nx*m*rb,-(p.z-p.nz*m*rb))});
+  const sh=new THREE.Shape(top(OUT,false,P.caseBevel));sh.holes=WELLS.map(w=>new THREE.Path(top(w,true,P.wellBevel)));
+  const tg=new THREE.ShapeGeometry(sh);tg.rotateX(-Math.PI/2);tg.deleteAttribute('uv');
+  // 井戸の底の板。暗がりの絵を貼る
+  const wg=new THREE.ShapeGeometry(WELLS.map(w=>new THREE.Shape(w.map(p=>new V2(p.x,-p.z)))));
+  wg.rotateX(-Math.PI/2);wg.translate(0,P.wellY,0);
+  const pa=wg.attributes.position,uv=wg.attributes.uv;
+  for(let i=0;i<pa.count;i++)uv.setXY(i,(pa.getX(i)-CX0)/CW,1-(pa.getZ(i)-CZ0)/CD);
+  for(const [m,g] of [[caseWall,mk(o.pos,o.idx,o.nor)],[caseTop,tg],[wellMesh,wg]]){if(m.geometry)m.geometry.dispose();m.geometry=g}
+}
+// 右上の丸いボタン2つと、ランプの小窓2つ
+const BTN=[];
+{
+  const pr=[[6.5,-.5],[6.5,.6]];for(let j=1;j<=6;j++){const a=j/6*Math.PI/2;pr.push([5.9+.6*Math.cos(a),.6+.6*Math.sin(a)])}pr.push([0,1.2]);
+  const bg=new THREE.LatheGeometry(pr.map(([r,y])=>new V2(r,y)),48);
+  // 押せる（沈んで、キーの上りのばねで戻る）。働きはない。キーと同じ形の入れ物を KEYS に足す（LIST には入れない）
+  [15.85,17.85].forEach((u,i)=>{const b=new THREE.Mesh(bg,M.button);b.position.set(wx(u),0,CZ0+13);b.castShadow=b.receiveShadow=true;b.userData.code='btn'+i;board.add(b);
+    const o={code:'btn'+i,btn:true,w:1,y:0,v:0,to:0,dn:false,src:new Set(),mesh:b};BTN.push(o);KEYS[o.code]=o});
+  const ls=new THREE.Shape(roundPoly(rect(-.8,-1.8,.8,1.8),.79,4).map(p=>new V2(p.x,-p.z)));
+  const lg=new THREE.ShapeGeometry(ls);lg.rotateX(-Math.PI/2);
+  [12.5,13.5].forEach((u,i)=>{const l=new THREE.Mesh(lg,LAMPS[i]);l.position.set(wx(u),.02,CZ0+12.5);l.receiveShadow=true;board.add(l)});
+}
+const SPR=LIST.concat(BTN);   // ばねで動くもの
+
+// キャップ：輪郭を、高さごとに内側へ寄せた輪を積んでつなぐ。上面は平らなふた（法線だけ倒して浅いくぼみに見せる）
+const prof=row=>[lerp(P.flatH,P.rows[row][0],P.sculpt),Math.tan(P.rows[row][1]*P.sculpt*D)];
+const rings=h=>P.ring.map(([a,b,d,r])=>[a*h+b,d,r]);
+// 上面は奥へ寄せ、傾きは上ほど強くかける（底は平ら）
+const tilter=(h,tan)=>(x,y,z)=>{const f=y/h;z-=P.back*f;return[x,y-z*tan*f,z]};
+function outline(k,part){
+  const g=P.gap/2;
+  if(k.kind==='enter')return inset([[-.75,-.5],[.75,-.5],[.75,1.5],[-.5,1.5],[-.5,.5],[-.75,.5]].map(([a,b])=>[a*U,b*U]),g);
+  if(part==='base')return inset(rect(-.75*U,-.5*U,U,.5*U),g);
+  const w=k.kind==='caps'?1.5:k.w;return inset(rect(-w/2*U,-.5*U,w/2*U,.5*U),g);
+}
+// 縦線と多角形の交わり（いちばん奥と手前）
+function zr(p,x){let lo=1e9,hi=-1e9;for(let i=0;i<p.length;i++){const a=p[i],b=p[(i+1)%p.length];
+  if(Math.abs(a.x-x)<1e-6){lo=Math.min(lo,a.z);hi=Math.max(hi,a.z)}
+  if((a.x-x)*(b.x-x)<0){const z=a.z+(b.z-a.z)*(x-a.x)/(b.x-a.x);lo=Math.min(lo,z);hi=Math.max(hi,z)}}return[lo,hi]}
+function shell(base,h,tan){
+  const R=rings(h),tf=tilter(h,tan),S=P.seg,pos=[],idx=[];
+  loft(pos,idx,R.map(([y,d,r])=>roundPoly(inset(base,d),r,S).map(p=>tf(p.x,y,p.z))),'out');
+  const side=mk(pos,idx).attributes.normal.array,n0=pos.length/3,nor=Array.from(side);
+  // 上面：縦に切った細長い帯で埋める（くぼみの法線のために、端の 6mm に点を足す）
+  const [,dT,rT]=R.at(-1),tp=roundPoly(inset(base,dT),rT,S),E=P.dishEdge;
+  let x0=1e9,x1=-1e9;for(const p of tp){x0=Math.min(x0,p.x);x1=Math.max(x1,p.x)}
+  const xs=tp.map(p=>p.x);for(let j=1;j<=4;j++)xs.push(x0+E*j/4,x1-E*j/4);
+  xs.sort((a,b)=>a-b);const X=[];for(const x of xs)if(x>=x0-1e-9&&x<=x1+1e-9&&(!X.length||x-X.at(-1)>1e-4))X.push(x);
+  const ca=Math.cos(Math.atan(tan)),sa=Math.sin(Math.atan(tan));
+  for(const x of X){
+    const [lo,hi]=zr(tp,x),t=(x-x0<E?1-(x-x0)/E:0)-(x1-x<E?1-(x1-x)/E:0),nx=P.dish*t,l=Math.hypot(nx,1);
+    for(const z of [lo,hi]){pos.push(...tf(x,h,z));nor.push(nx/l,ca/l,sa/l)}
+  }
+  for(let j=0;j<X.length-1;j++){const a=n0+2*j;tri(pos,idx,a,a+1,a+3,1);tri(pos,idx,a,a+3,a+2,1)}
+  return mk(pos,idx,nor);
+}
+// ↑ のキャップの裏：厚さ 1.2 の空洞、天井、縁、軸受け（十字の溝つきの円筒）
+function hollow(base,h,tan){
+  const R=rings(h),tf=tilter(h,tan),S=P.seg,t=P.wall,pos=[],idx=[],yc=h-t;
+  const at=y=>{for(let i=1;i<R.length;i++)if(y<=R[i][0]+1e-9){const u=(y-R[i-1][0])/(R[i][0]-R[i-1][0]);return[lerp(R[i-1][1],R[i][1],u),lerp(R[i-1][2],R[i][2],u)]}return R.at(-1).slice(1)};
+  const ring=(y,d,r)=>roundPoly(inset(base,d),r,S).map(p=>tf(p.x,y,p.z));
+  const inner=[0,R[1][0],yc].map(y=>{const [d,r]=at(y);return ring(y,d+t,Math.max(.5,r-t))});
+  loft(pos,idx,inner,'in');
+  loft(pos,idx,[ring(0,0,R[0][2]),inner[0]],'down');
+  const c=inner[2],b0=pos.length/3;for(const p of c)pos.push(...p);
+  for(const f of THREE.ShapeUtils.triangulateShape(c.map(p=>new V2(p[0],p[2])),[]))tri(pos,idx,b0+f[0],b0+f[1],b0+f[2],-1);
+  const sh=new THREE.Shape().absarc(0,0,2.8,0,Math.PI*2,false),a=4.1/2,b=1.35/2;
+  sh.holes.push(new THREE.Path([[a,b],[b,b],[b,a],[-b,a],[-b,b],[-a,b],[-a,-b],[-b,-b],[-b,-a],[b,-a],[b,-b],[a,-b]].map(([x,y])=>new V2(x,y))));
+  const sg=new THREE.ExtrudeGeometry(sh,{depth:4,bevelEnabled:false,curveSegments:24});
+  sg.rotateX(Math.PI/2);sg.translate(0,yc,0);sg.deleteAttribute('uv');
+  const sp=sg.attributes.position;for(let i=0;i<sp.count;i++){const q=tf(sp.getX(i),sp.getY(i),sp.getZ(i));sp.setXYZ(i,q[0],q[1],q[2])}
+  return[mk(pos,idx),sg];
+}
+
+/* ---------- 印字（1枚の絵にまとめて描く） ---------- */
+const LEG=LIST.filter(k=>k.label!=='');LEG.forEach((k,i)=>k.cell=i);
+const CELL=P.font.cell,COLS=16,atlas=document.createElement('canvas');
+atlas.width=COLS*CELL;atlas.height=Math.ceil(LEG.length/COLS)*CELL;
+const tex=new THREE.CanvasTexture(atlas);tex.colorSpace=THREE.SRGBColorSpace;tex.anisotropy=renderer.capabilities.getMaxAnisotropy();
+const inkMat=new THREE.MeshBasicMaterial({map:tex,transparent:true,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2,toneMapped:false});
+let open=null,armed=false;
+function legColor(k){return TINT.has(k.code)?legOf(k.code):(k.code==='Escape'&&open)||(k.code==='Enter'&&armed)?inkOf(k.code):P.legend}
+// 置き方：two（2段）| one（1文字）| arrow（矢印）| word（幅 1u の言葉：下の中央）| left・right（幅の広いキーの言葉：左下・右下の隅。キーの中心が 7.5u より左か右か）
+const ARROWS=new Set(['←','↑','→','↓']);
+function legLay(k){
+  const L=k.label;if(Array.isArray(L))return'two';
+  if([...L].length===1)return ARROWS.has(L)?'arrow':'one';
+  return k.w<=1?'word':k.cu<7.5?'left':'right';
+}
+// 隅に置く言葉の板は、キーの上面の左端・右端に寄せる（mm）。Caps と Enter は上面の幅 1.5u で見る
+function legDx(k){const s={left:-1,right:1}[legLay(k)];if(!s)return 0;const w=k.kind==='caps'||k.kind==='enter'?1.5:k.w;return s*(w*U-6.25-12.8)/2}
+function drawCell(k){
+  const g=atlas.getContext('2d'),F=P.font,x=(k.cell%COLS)*CELL,y=Math.floor(k.cell/COLS)*CELL,cx=x+CELL/2,cy=y+CELL/2,font=s=>`${F.weight} ${s}px "${F.family}","M PLUS 1 Code",sans-serif`;
+  g.clearRect(x,y,CELL,CELL);g.fillStyle=k.ink=legColor(k);g.globalAlpha=1;g.textAlign='center';g.textBaseline='middle';
+  const lay=legLay(k),L=k.label;
+  if(lay==='two'){g.font=font(F.two);g.fillText(L[0],cx,cy+F.twoGap);if(L[1]){g.font=font(F.twoS);g.globalAlpha=F.shiftA;g.fillText(L[1],cx,cy-F.twoGap);g.globalAlpha=1}}
+  else if(lay==='one'||lay==='arrow'){g.font=font(lay==='one'?F.one:F.arrow);g.fillText(L,cx,cy+F.oneDy)}
+  else{
+    g.font=font(F.word);g.textBaseline='alphabetic';const by=y+CELL-F.mb;
+    if(lay==='word')g.fillText(L,cx,by);
+    else if(lay==='left'){g.textAlign='left';g.fillText(L,x+F.mx,by)}
+    else{g.textAlign='right';g.fillText(L,x+CELL-F.mx,by)}
+  }
+  tex.needsUpdate=true;
+}
+// 印字の書体の候補（見比べ用）。?legend=名前 で切り替える。替えるのは書体と太さだけ（大きさと置き方は P.font のまま）。既定は P.font（M PLUS 2）
+const LEGENDS={
+  code:{family:'M PLUS 1 Code',weight:500},
+  outfit:{family:'Outfit',weight:600,css:'Outfit:wght@600'},
+  barlow:{family:'Barlow Semi Condensed',weight:600,css:'Barlow+Semi+Condensed:wght@600'},
+  round:{family:'M PLUS Rounded 1c',weight:700,css:'M+PLUS+Rounded+1c:wght@700'}
+};
+let legendCss=Promise.resolve();   // 候補の書体の CSS が読めるまで待つ用
+{const L=LEGENDS[qs.get('legend')];if(L){const {css,...o}=L;Object.assign(P.font,o);
+  if(css){const l=document.createElement('link');l.rel='stylesheet';l.href=`https://fonts.googleapis.com/css2?family=${css}&display=block`;
+    legendCss=new Promise(r=>{l.onload=l.onerror=r;setTimeout(r,3000)});document.head.appendChild(l)}}}
+const drawLegends=()=>LEG.forEach(drawCell);
+const LEG_TEXT=[...new Set(LEG.flatMap(k=>[...[].concat(k.label).join('')]))].join('');
+function legendPlane(k){
+  const c=k.cell%COLS,r=Math.floor(k.cell/COLS),R=atlas.height/CELL,g=new THREE.PlaneGeometry(13,13);
+  g.setAttribute('uv',new THREE.Float32BufferAttribute([c/COLS,1-r/R,(c+1)/COLS,1-r/R,c/COLS,1-(r+1)/R,(c+1)/COLS,1-(r+1)/R],2));
+  return new THREE.Mesh(g,inkMat);
+}
+
+// キーを置く
+const HIT=[];
+for(const k of LIST){
+  const mat=TINT.has(k.code)?M[k.code]:M.key;
+  k.g=new THREE.Group();k.g.position.set(wx(k.cu),P.capY,wz(k.cv));
+  k.mesh=new THREE.Mesh(undefined,mat);k.mesh.userData.code=k.code;k.mesh.castShadow=k.mesh.receiveShadow=true;k.g.add(k.mesh);
+  if(k.kind==='caps'){k.base=new THREE.Mesh(undefined,mat);k.base.userData.code=k.code;k.base.castShadow=k.base.receiveShadow=true;k.g.add(k.base)}
+  if(k.label!==''){k.leg=legendPlane(k);k.g.add(k.leg)}
+  if(k!==UP){board.add(k.g);HIT.push(k.mesh);if(k.base)HIT.push(k.base)}
+}
+for(const b of BTN)HIT.push(b.mesh);
+// ↑ 以外のキーの下の、乳白のスイッチの箱（低い角度でキーの下がのぞけても、空っぽに見えないように）。行列は作ったときに1回だけ入れる
+{
+  const B=P.model,ks=LIST.filter(k=>k!==UP),h=B.boxTop-P.wellY,m=new THREE.Matrix4();
+  const im=new THREE.InstancedMesh(new RoundedBoxGeometry(B.boxW,h,B.boxW,2,.6),M.box,ks.length);
+  ks.forEach((k,i)=>im.setMatrixAt(i,m.makeTranslation(wx(k.cu),P.wellY+h/2,wz(k.cv))));
+  im.instanceMatrix.needsUpdate=true;im.receiveShadow=true;im.frustumCulled=false;board.add(im);
+}
+// ↑：むき出しの軸（乳白の箱と、十字）。キャップは別の群で、はまったり床に置かれたりする
+const housing=new THREE.Mesh(new RoundedBoxGeometry(14,5.4,14,2,.6),M.box);
+housing.position.set(wx(UP.cu),P.wellY+2.7,wz(UP.cv));housing.castShadow=housing.receiveShadow=true;housing.userData.code='ArrowUp';board.add(housing);
+const crossG=new THREE.Group();crossG.position.set(wx(UP.cu),0,wz(UP.cv));board.add(crossG);
+for(const [a,b] of [[4.1,1.3],[1.3,4.1]]){const m=new THREE.Mesh(new THREE.BoxGeometry(a,3.6,b),M.cross);m.position.y=1.2+1.8;m.castShadow=m.receiveShadow=true;m.userData.code='ArrowUp';crossG.add(m);HIT.push(m)}
+HIT.push(housing);
+const capG=UP.g;capG.position.set(CAPX,0,CAPZ);scene.add(capG);
+const capIn=[new THREE.Mesh(undefined,M.inner),new THREE.Mesh(undefined,M.inner)];
+for(const m of [UP.mesh,...capIn]){m.userData.code='capG';m.castShadow=m.receiveShadow=true;HIT.push(m)}
+capG.add(...capIn);
+let capTop=8;
+function buildKeys(){
+  const cache={};
+  const geo=(k,part)=>{const id=k.kind+k.w+'|'+k.row+'|'+part;if(!cache[id]){const [h,tan]=part==='base'?[P.capsLow,0]:prof(k.row);cache[id]=shell(outline(k,part),h,tan)}return cache[id]};
+  const old=new Set();
+  for(const k of LIST){
+    if(k.mesh.geometry)old.add(k.mesh.geometry);if(k.base&&k.base.geometry)old.add(k.base.geometry);
+    k.mesh.geometry=geo(k,'top');if(k.base)k.base.geometry=geo(k,'base');
+    if(k.leg){const [h,tan]=prof(k.row),p=tilter(h,tan)(0,h,0);k.leg.position.set(p[0]+legDx(k),p[1]+.03,p[2]);k.leg.rotation.set(Math.atan(tan)-Math.PI/2,0,0)}
+  }
+  const [h,tan]=prof(UP.row),[a,b]=hollow(outline(UP,'top'),h,tan);
+  for(const [m,g] of [[capIn[0],a],[capIn[1],b]]){if(m.geometry)m.geometry.dispose();m.geometry=g}
+  for(const g of old)g.dispose();
+  UP.mesh.geometry.computeBoundingBox();capTop=UP.mesh.geometry.boundingBox.max.y;
+}
+
+/* ---------- 井戸の底の暗がりと、床の影 ---------- */
+const hexA=(hex,a)=>{const c=new THREE.Color(hex);return`rgba(${Math.round(c.r*255)},${Math.round(c.g*255)},${Math.round(c.b*255)},${a})`};
+const aoCan=document.createElement('canvas');aoCan.width=2048;aoCan.height=Math.round(2048*CD/CW);
+const aoTex=new THREE.CanvasTexture(aoCan);aoTex.colorSpace=THREE.SRGBColorSpace;aoTex.anisotropy=8;M.well.map=aoTex;
+function drawAO(){
+  const g=aoCan.getContext('2d'),s=aoCan.width/CW,cw=aoCan.width;
+  g.shadowColor='transparent';g.fillStyle=P.mat.well[0];g.fillRect(0,0,cw,aoCan.height);
+  // キーの足元の角丸を、画面の外に描いて影だけを落とす
+  g.fillStyle='#000';g.shadowBlur=P.aoBlur*s;g.shadowOffsetX=cw;
+  const foot=k=>{const pts=roundPoly(outline(k,k.kind==='caps'?'base':'top'),1.6,4);
+    g.beginPath();pts.forEach((p,i)=>{const X=(wx(k.cu)+p.x-CX0)*s-cw,Y=(wz(k.cv)+p.z-CZ0)*s;i?g.lineTo(X,Y):g.moveTo(X,Y)});g.closePath();g.fill()};
+  for(const k of LIST){
+    // 色のキーは、その色が底に移る
+    const c=TINT.has(k.code)?capOf(k.code):null;g.shadowColor=hexA(c||P.aoColor,(c?P.aoTint:P.aoAlpha)*P.ao);
+    foot(k);
+  }
+  aoTex.needsUpdate=true;
+}
+const SH_PAD=110,shades=P.floor.map(()=>{
+  const c=document.createElement('canvas'),t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;
+  const m=new THREE.Mesh(new THREE.PlaneGeometry(CW+SH_PAD*2,CD+SH_PAD*2),new THREE.MeshBasicMaterial({map:t,transparent:true,depthWrite:false,toneMapped:false}));
+  m.rotation.x=-Math.PI/2;m.renderOrder=-1;scene.add(m);return m});
+function drawFloor(){
+  shades.forEach((m,i)=>{
+    const f=P.floor[i],k=2.4,c=m.material.map.image,g=c.getContext('2d');
+    c.width=Math.round((CW+SH_PAD*2)*k);c.height=Math.round((CD+SH_PAD*2)*k);
+    g.shadowColor=f.color;g.shadowBlur=f.blur*k;g.shadowOffsetX=c.width;
+    g.beginPath();g.roundRect(SH_PAD*k-c.width,SH_PAD*k,CW*k,CD*k,P.caseR*k);g.fill();
+    m.material.map.needsUpdate=true;   // 位置（光の向きでずらす）は aimSun が決める
+  });
+  const c=blob.material.map.image,g=c.getContext('2d'),r=c.width/2,gr=g.createRadialGradient(r,r,0,r,r,r);
+  gr.addColorStop(0,hexA(P.capShadow.color,1));gr.addColorStop(.45,hexA(P.capShadow.color,.55));gr.addColorStop(1,hexA(P.capShadow.color,0));
+  g.clearRect(0,0,c.width,c.height);g.fillStyle=gr;g.fillRect(0,0,c.width,c.height);blob.material.map.needsUpdate=true;
+  blob.geometry.dispose();blob.geometry=new THREE.PlaneGeometry(P.capShadow.size,P.capShadow.size);
+}
+const blob=(()=>{const c=document.createElement('canvas');c.width=c.height=128;const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;
+  const m=new THREE.Mesh(new THREE.PlaneGeometry(1,1),new THREE.MeshBasicMaterial({map:t,transparent:true,depthWrite:false,toneMapped:false}));
+  m.rotation.x=-Math.PI/2;m.renderOrder=-1;scene.add(m);return m})();
+
+/* ---------- カメラと構図 ---------- */
+// cam：見えている向き（回りこみつき）。cam0：回りこみゼロ（キーボードの映った範囲 K と、確かめ用の位置）
+const cam=new THREE.PerspectiveCamera(20,1,20,8000),cam0=cam.clone();
+const CASE=[];for(const p of OUT)for(const y of [0,FLOOR])CASE.push(new V3(p.x,y,p.z));
+// 文字の位置用：キーの頭の高さ（y=10）の点も足す（低い角度でキーがケースより上に見える）。
+// ケースの輪郭ではなく、キーの並ぶ範囲の四隅で取る（ケースの輪郭で取ると、ホームの向きで上端が 10px ほど高く出て、中身の入る白が減る）
+const CASE_T=CASE.concat([[0,0],[18.35,0],[18.35,6.3],[0,6.3]].map(([a,b])=>new V3(wx(a),10,wz(b))));
+// homeTop：ホームの向きでのキーボードの上端（phone の中身の高さの上限）
+let W=0,H=0,mode='',pad=32,dist=900,offY=0,homeTop=0,panMin=0,panMax=0,panHome=0,kA=1,fitted=false,camDirty=false;
+const dodgeM=()=>P.dodge.m[mode==='phone'?1:0];   // 文字とキーボードのすき間（よける余白）
+const sway={x:0,y:0,tx:0,ty:0,back:false};
+// 視点：注視点 (tx, −4, tz) のまわりを回る。yaw・el は °、zoom は 1 が最初の大きさ（距離 = dist / zoom。dist と offY はホームの向きで fit が決める）
+// ox・oy：画面の上でのずらし（px）。絵をそのまま右へ ox、下へ oy（回転の中心は注視点のまま）
+const view={tx:0,tz:0,yaw:0,el:0,zoom:1,ox:0,oy:0};
+// 上下のずらし offY と、画面の上でのずらし ox・oy を、カメラの映す窓に入れる（cam と cam0 に同じ値）
+const offset=(c,v)=>c.setViewOffset(W,H,-v.ox,offY-v.oy,W,H);
+function applyOff(){if(W)for(const c of [cam,cam0])offset(c,view)}
+// homing：ホームへ戻る途中。dodging：よけている途中
+let zoomT=1,zAnchor=null,homing=false,dodging=false,homeTw=null;
+const orbV={y:0,e:0,on:false,hold:false,t:0,kb:false,tau:0};   // 回す慣性（°/ms）。hold：キーで回している間。t：キーを押し続けている時間。tau：今の慣性の時定数
+const wrap=a=>a-360*Math.round(a/360),wrapR=a=>a-2*Math.PI*Math.round(a/(2*Math.PI));
+function aim(c,v){const yaw=v.yaw*D,el=v.el*D,d=dist/v.zoom;c.position.set(v.tx+d*Math.cos(el)*Math.sin(yaw),-4+d*Math.sin(el),v.tz+d*Math.cos(el)*Math.cos(yaw));c.lookAt(v.tx,-4,v.tz);c.updateMatrixWorld(true)}
+const homeView=()=>mode==='phone'?{tx:panHome,tz:0,yaw:P.phone.yaw,el:P.phone.el,zoom:1,ox:0,oy:0}:{tx:0,tz:0,yaw:P.pc.yaw,el:P.pc.el,zoom:1,ox:0,oy:0};
+function sameTurn(h){const t=P.view.tol;return Math.abs(wrap(view.yaw-h.yaw))<t[0]&&Math.abs(view.el-h.el)<t[0]&&Math.abs(view.zoom-h.zoom)<t[1]}
+const atHome=()=>{const h=homeView(),t=P.view.tol;return sameTurn(h)&&Math.hypot(view.tx-h.tx,view.tz-h.tz)<t[2]&&Math.abs(view.ox)<t[3]&&Math.abs(view.oy)<t[3]};
+// 向きと大きさがホーム（phone は、横パンの範囲（端のゴムも含む）のどこにいてもよい）
+function posed(){const h=homeView(),t=P.view.tol[2];if(!sameTurn(h)||Math.abs(view.tz)>=t)return false;
+  if(mode!=='phone')return Math.abs(view.tx-h.tx)<t;const r=P.pan.max/kA+t;return view.tx>panMin-r&&view.tx<panMax+r}
+const zRange=()=>P.view.zoom[mode==='phone'?'phone':'pc'],clampZ=z=>clamp(z,...zRange());
+const setEl=e=>{view.el=clamp(e,P.view.el[0],P.view.el[1])};
+function clampT(){const m=P.view.margin;view.tx=clamp(view.tx,CX0-m,CAPX+m);view.tz=clamp(view.tz,CZ0-m,-CZ0+m)}
+function clampView(){setEl(view.el);view.zoom=clampZ(view.zoom);clampT();clampO()}
+// ox・oy の範囲：キーボードの映った範囲 K が、画面の中に keep px 以上残る（見失わない。大きく寄せているときも、端まで見に行ける）。
+// ずらしは画面の上の平行移動なので、足りないぶんだけ戻せばよい。
+// （前は「K の中心が画面の中」だった。それだと、phone で横パンの端にいるとき・寄せているときに中心が外にあるのがふつうで、
+//   画面の大きさが変わっただけで絵が飛んだ。大きく寄せたときに、端のキーまでずらして見に行くこともできなかった）
+function clampO(){
+  if(!W)return;const k=kbox(),m=Math.min(P.view.keep,W/2,H/2);
+  view.ox+=k[2]<m?m-k[2]:k[0]>W-m?W-m-k[0]:0;view.oy+=k[3]<m?m-k[3]:k[1]>H-m?H-m-k[1]:0;
+}
+const px=(c,x,y,z)=>{V.set(x,y,z).project(c);return[(V.x+1)/2*W,(1-V.y)/2*H]};
+function box2(c,pts){let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;for(const p of pts){const [x,y]=px(c,p.x,p.y,p.z);x0=Math.min(x0,x);x1=Math.max(x1,x);y0=Math.min(y0,y);y1=Math.max(y1,y)}return[x0,y0,x1,y1]}
+// 距離は二分探索で合わせる（f は距離が増えると減る）
+function solve(f,want){let a=40,b=60000;for(let i=0;i<60;i++){const m=Math.sqrt(a*b);if(f(m)>want)a=m;else b=m}return Math.sqrt(a*b)}
+const uAt=(tx=view.tx)=>{const z=wz(3.8),h=prof(3)[0];return px(cam0,tx+U/2,h,z)[0]-px(cam0,tx-U/2,h,z)[0]};
+const safeB=()=>parseFloat(getComputedStyle(app).paddingBottom)||0;
+// 名前の下端（名前は上端 pad、行の高さ 1。打っている途中で空でも同じ値）
+const nameB=()=>pad+(parseFloat(getComputedStyle(nameEl).fontSize)||14);
+// K：向き v（既定は今の視点）で、キーボード（CASE_T）が映った範囲 [x0, y0, x1, y1]（回りこみなし。床のキャップは含めない）
+function kbox(v=view){aim(cam0,v);offset(cam0,v);const b=box2(cam0,CASE_T);if(v!==view){aim(cam0,view);offset(cam0,view)}return b}
+function fit(){
+  const w=app.clientWidth,h=app.clientHeight;if(!w||!h)return;
+  const wasHome=fitted&&atHome(),wasPosed=fitted&&posed();
+  W=w;H=h;const fm=qs.get('mode'),m=fm==='pc'||fm==='phone'?fm:W<P.phoneBelow&&H>=W?'phone':'pc',changed=m!==mode;mode=m;
+  root.dataset.mode=mode;pad=P.pad[mode==='phone'?1:0];root.style.setProperty('--pad',pad+'px');
+  const narrow=mode==='pc'&&(W<P.pc.narrow||H<P.pc.short);root.dataset.narrow=narrow?'1':'0';
+  renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));renderer.setSize(W,H,false);
+  const sm=P.shadowSizes[touchy||Math.min(W,H)<P.phoneBelow?1:0];if(sm!==P.shadowMap){P.shadowMap=sm;applyLook()}
+  // 距離と上下のずらしは、ホームの向きで決める（自由に回している間も変えない。注視点が画面の同じ場所に映り続ける）
+  const C=mode==='pc'?P.pc:P.phone,hv={tx:0,tz:0,yaw:C.yaw,el:C.el,zoom:1},at=f=>d=>{dist=d;aim(cam0,hv);return f()};
+  for(const c of [cam,cam0]){c.fov=C.fov;c.aspect=W/H;c.clearViewOffset()}
+  const yT=mode==='pc'?H-Math.max(C.bottom[0],C.bottom[1]*H):H-C.bottom-safeB();
+  if(mode==='pc'){
+    const fr=W>=1200?C.frac[1]:W<=700?C.frac[0]:lerp(C.frac[0],C.frac[1],(W-700)/500);
+    // 高さの上限：画面の半分まで。かつ、名前の下の紙（ラベルと favorites）とキーボードのあいだに白を残す
+    // （キーボードの上端が 名前の下端 + top + ラベル + gap + zone + よける余白 より下に来る。上端は K と同じ CASE_T で測る）
+    const Q=P.paper,room=yT-(nameB()+Q.top+P.labelH+Q.gap+Q.zone[narrow?1:0]+dodgeM()),maxH=Math.max(120,Math.min(C.maxH*H,room));
+    const dw=solve(at(()=>{const b=box2(cam0,CASE);return b[2]-b[0]}),fr*W),dh=solve(at(()=>{const b=box2(cam0,CASE_T);return b[3]-b[1]}),maxH);
+    dist=Math.max(dw,dh);
+  }else dist=solve(at(()=>uAt(0)),clamp(W/C.u[0],C.u[1],C.u[2]));
+  aim(cam0,hv);
+  // 縦の位置：いちばん下の点が決めた y に来るよう、絵を上下にずらす（実際に映して合わせる）
+  const bot=s=>{cam0.setViewOffset(W,H,0,s,W,H);return box2(cam0,CASE)[3]};
+  const y0=bot(0),y1=bot(100);offY=(yT-y0)*100/(y1-y0);
+  bot(offY);
+  if(mode==='phone'){
+    // パンの範囲：左はケースの縁の外、右は床のキャップの外まで
+    const xL=CX0-C.edge[0],xR=CAPX+U/2*1.4+C.edge[1],kL=(px(cam0,xL,0,-CZ0)[0]-W/2)/xL,kR=(px(cam0,xR,FLOOR,CAPZ)[0]-W/2)/xR;
+    panMin=xL+W/2/kL;panMax=xR-W/2/kR;if(panMin>panMax)panMin=panMax=(panMin+panMax)/2;
+    panHome=clamp(wx(C.start),panMin,panMax);kA=uAt(0)/U;
+  }else panHome=0;
+  homeTop=kbox(homeView())[1];
+  // 視点：ホームにいたならホームのまま（phone で、見に来た人がまだ横に動かしていない、も同じ）。
+  // 自由に回していたなら、その向きのまま（ox・oy も。範囲だけ直す）。pc ⇄ phone が切り替わったらホームへ
+  if(changed||!fitted||wasHome)setViewNow(homeView());
+  else{if(mode==='phone'&&wasPosed)view.tx=clamp(view.tx,panMin,panMax);clampView();zoomT=view.zoom;camDirty=true}
+  fitted=true;place();
+}
+// viewSig：最後に調べたときの視点。dodgeNeed：よけるかを調べ直す（視点か中身が変わったときだけ立てる。調べたら下ろす）
+let viewSig='',dodgeNeed=false;
+function place(){
+  const C=mode==='pc'?P.pc:P.phone;
+  aim(cam,mode==='pc'?{...view,yaw:view.yaw+sway.x*C.sway[0],el:view.el-sway.y*C.sway[1]}:view);aim(cam0,view);applyOff();
+  const a=view.yaw-homeView().yaw;if(a!==sunYaw){sunYaw=a;aimSun()}
+  camDirty=false;
+}
+
+/* ---------- 状態 ---------- */
+// cap：'off'（床にある）| 'carry'（つかんでいる）| 'flying'（決まった軌道で飛んでいる）| 'on'（はまっている）
+let cap='off',capKind=null,capT0=0,capFrom=null,capN=0,floorYaw=P.cap.yaw;
+// 置いてあるときの場所（mm）、向き（rad）、表裏（down：裏返し）、乗っている面（y：キーがないときの面の高さ、ride：乗っているキー）
+let capF={x:CAPX,z:CAPZ,yaw:P.cap.yaw*D,down:true,y:FLOOR,ride:[]};
+let intro=false,fade=1,introEv=[],introTw=[],ready=false;
+let openedAt=0,openedWall=0,showEv=[],hint=null,closing=null;
+let hov=null,hovSrc=null,hovReady=false,hovEv=null,lastOff=-1e9,lastOffWall=-1e9;
+let mute=null;   // 押した直後のキー。カーソルが一度外れるまで、open の言葉に替えない（開いた中身の名前を出したままにする）
+const stillQ=matchMedia('(prefers-reduced-motion:reduce)');
+let still=stillQ.matches||qs.get('still')==='1';
+stillQ.addEventListener?.('change',()=>{still=stillQ.matches||qs.get('still')==='1'});
+const live=c=>c==='cap'?cap==='off':TINT.has(c)?true:c==='Escape'?!!open:c==='Enter'?armed:!!VK[c]||c==='Home'||c==='End';
+function wordOf(code){
+  const c=CONTENT[code];
+  // 開いている間は、ほかの中身のキーに乗せても、その名前を出さない（見出しは、開いている中身の名前のまま）。
+  // close は出さない（08。taq「閉じるときに一瞬 close って入るの要らない」）。外へ開く SNS の open だけは出す
+  if(c)return open===c?(armed?'open':null):open?null:c;
+  if(code==='Enter'&&armed)return'open';
+  return null;
+}
+function targetOf(k){
+  const S=P.spring;
+  if(k.btn)return k.src.size?-P.model.button:0;
+  if(k.src.size)return -S.travel;
+  if(k.latch)return -S.latch;
+  if(k.code==='Enter'&&armed)return -S.armed;
+  if(k.code===hov&&hovSrc!=='touch'&&TINT.has(k.code))return -S.hover;
+  return 0;
+}
+// 開く・閉じる。中身は「紙」：名前の下にラベル（すぐ全部）、その下に中身（行は time.show ms 後から time.row ms おきに上から）。
+// 視点はそのまま（ホームへ戻さない）。重なるときだけ、あとで dodge がキーボードをよける
+function openC(name){
+  clearShow();open=name;const l=DATA.links[name];armed=SNS.has(name)&&!!(l&&l.id&&l.url);openedAt=now;openedWall=performance.now();
+  const rows=build(name);panel.hidden=false;placePanel();
+  rows.forEach((list,i)=>showEv.push(at(P.time.show+(still?0:i*P.time.row),()=>list.forEach(e=>e.style.visibility=''))));
+  say.textContent=spoken(name);
+  sync();
+}
+// 閉じても、キーボードは元の場所に戻さない
+function close(){
+  clearShow();open=null;armed=false;panel.hidden=true;panel.replaceChildren();hint=null;say.textContent='';
+  sync();
+}
+function clearShow(){for(const e of showEv)e.fn=null;showEv=[];if(closing){closing.fn=null;closing=null}}
+// 読み上げ用：開いた中身を1つの文字列にして、見えない場所（#say）に入れる
+function spoken(name){
+  const j=r=>r.filter(Boolean).join(', ');
+  if(name==='about')return'about: '+(DATA.about.join(' ')||'nothing yet');
+  if(name==='favorites')return'favorites. music: '+DATA.music.map(j).join('; ')+'. films: '+DATA.films.map(j).join('; ')+(DATA.note.length?'. '+DATA.note.join(' '):'');
+  if(name==='lately')return'lately: '+(DATA.lately.map(j).join('; ')||'nothing yet');
+  const l=DATA.links[name]||{};return name+': '+(l.id?'@'+l.id+(l.url?'. enter':''):'not yet');
+}
+// 外へ開いたあと：手がかりを opened に替えて、少ししてから閉じる
+function wentOut(){
+  if(hint)hint.textContent='opened';say.textContent='opened';armed=false;sync();
+  if(closing)closing.fn=null;closing=at(P.time.opened,()=>{closing=null;close()});
+}
+function goOut(){
+  const l=DATA.links[open];if(!l||!l.url)return;
+  window.open(l.url,'_blank','noopener');   // 押した処理の中で、その場で開く
+  wentOut();
+}
+function act(code){
+  const c=CONTENT[code];
+  if(c){
+    // 2回目の「250ms 以上たっていれば」は、中の時計か本物の時計のどちらかで満たせばよい（中の時計は、何も動いていない間は止まる）
+    if(SNS.has(c)){if(open!==c)openC(c);else if(armed){if(now-openedAt>=P.time.second||performance.now()-openedWall>=P.time.second)goOut()}else close()}
+    else open===c?close():openC(c);
+    return;
+  }
+  if(code==='Enter'&&armed)goOut();
+  else if(code==='Escape'&&open)close();
+  else if(code==='Home')goHome();
+  else if(code==='End')tweenView({...view,el:P.view.under},P.view.home);   // 裏を見る：yaw はそのまま
+}
+function sync(){
+  for(const k of LIST)k.latch=!!open&&CONTENT[k.code]===open;
+  for(const c of ['Escape','Enter']){const k=KEYS[c];if(legColor(k)!==k.ink)drawCell(k)}
+  for(const b of sr.querySelectorAll('button'))b.setAttribute('aria-expanded',String(CONTENT[b.dataset.code]===open));
+  updLabel();wake();
+}
+// 中身を組む。行は visibility で隠しておき、時計で順に出す
+function build(name){
+  const rows=[],add=(e,i,row=true)=>{e.classList.add('r');e.style.visibility='hidden';if(row)e.dataset.row='';(rows[i]||(rows[i]=[])).push(e);return e};
+  panel.replaceChildren();hint=null;
+  if(name==='about'){
+    const b=el('div','about');
+    if(DATA.about.length)DATA.about.forEach((l,i)=>b.append(add(el('p',null,l),i)));else b.append(add(el('p','none','nothing yet'),0));
+    panel.append(b);
+  }else if(name==='favorites'){
+    const f=el('div','fav');
+    for(const [h,list] of [['music',DATA.music],['films',DATA.films]]){
+      const g=el('div'),ul=el('ul');g.append(add(el('h2',null,h),0,false));
+      list.forEach((r,i)=>{const li=el('li');li.append(el('span','t',r[0]),el('span','a',r[1]),el('span','y',r[2]));ul.append(add(li,i+1))});
+      g.append(ul);f.append(g);
+    }
+    panel.append(f);
+    // favorites の下のひとこと（content.txt の [note]）。リストの行が出終わってから出す
+    const n=Math.max(DATA.music.length,DATA.films.length)+1;
+    DATA.note.forEach((l,i)=>panel.append(add(el('p','note',l),n+i)));
+  }else if(name==='lately'){
+    if(DATA.lately.length){const b=el('div','late');DATA.lately.forEach((r,i)=>{const d=el('div');d.append(el('span','d',r[0]),el('span',null,r[1]));b.append(add(d,i))});panel.append(b)}
+    else panel.append(add(el('p','none','nothing yet'),0));
+  }else{
+    const l=DATA.links[name]||{},p=el('p');
+    if(l.id){
+      const a=el(l.url?'a':'span','handle','@'+l.id);
+      if(l.url){
+        a.href=l.url;a.target='_blank';a.rel='noopener noreferrer';hint=el('span','hint',touchy?'tap':'enter');p.append(a,hint);
+        a.addEventListener('click',()=>{if(armed)wentOut()});   // 文字そのものを押して開いたとき（開くのはブラウザに任せる）
+      }else p.append(a);
+    }else p.append(el('span','none','not yet'));
+    panel.append(add(p,0));
+  }
+  return rows;
+}
+
+/* ---------- 時計と動き ---------- */
+// 時間はこの時計だけで進める。rAF は advance を呼ぶだけ。確認用に T.step で手で進められる
+let now=0,moving=false;
+const EV=[],TW=[];
+const at=(ms,fn)=>{const e={t:now+ms,fn};EV.push(e);return e};
+const tween=(ms,fn)=>{const w={t0:now,ms,fn};TW.push(w);return w};
+function fire(){for(let i=0;i<EV.length;){const e=EV[i];if(!e.fn){EV.splice(i,1);continue}if(e.t<=now+1e-9){EV.splice(i,1);e.fn();i=0;continue}i++}}
+function springs(h){
+  const S=P.spring;let mv=false;
+  for(const k of SPR){
+    const to=targetOf(k);
+    if(to!==k.to){k.to=to;k.dn=to<k.y}
+    if(k.y===to&&k.v===0)continue;
+    mv=true;
+    if(still){k.y=to;k.v=0;continue}
+    const wide=k.w>=2,K=k.dn?(wide?S.wideDown:S.down[0]):(wide?S.wideUp:S.up[0]),C=k.dn?S.down[1]:S.up[1];
+    k.v+=(K*(to-k.y)-C*k.v)*h;k.y+=k.v*h;
+    if(k.y<-S.travel){k.y=-S.travel;k.v=0}   // 底でコツと止まる
+    if(Math.abs(k.y-to)<.004&&Math.abs(k.v)<.0004){k.y=to;k.v=0}
+  }
+  return mv;
+}
+function swayStep(h){
+  if(mode!=='pc'||mouseHeld)return false;
+  // カーソルに合わせた回りこみは、ホームにいるときだけ。それ以外では 0 に戻す
+  if(still){if(sway.x||sway.y){sway.x=sway.y=0;camDirty=true}return false}
+  const home=atHome(),tx=home?sway.tx:0,ty=home?sway.ty:0,dx=tx-sway.x,dy=ty-sway.y;
+  if(Math.abs(dx)+Math.abs(dy)<2e-3){if(dx||dy){sway.x=tx;sway.y=ty;camDirty=true}return false}   // 目に見えない残りは切り上げて、描くのを止める
+  const f=1-Math.exp(-h/(sway.back||!home?P.pc.back:P.pc.follow));sway.x+=dx*f;sway.y+=dy*f;camDirty=true;return true;
+}
+// phone の横パン。panAx：null ならホームの向き（view.tx だけ、範囲は panMin〜panMax、端のゴムつき）。
+// 向きを変えているときは、画面の横の向き（机の上の単位ベクトル）に沿って動き、tx は CX0〜CAPX+20 で止まる
+let panMode=null,panV=0,panAx=null;
+function panStep(h){
+  if(!panMode)return false;
+  const Q=P.pan;
+  if(panAx){
+    const d=panV*h;view.tx+=panAx[0]*d;view.tz+=panAx[1]*d;panV*=Math.exp(-h/Q.tau);
+    const x=clamp(view.tx,CX0,CAPX+20);if(x!==view.tx){view.tx=x;panV=0}clampT();
+    if(Math.abs(panV)*kA*view.zoom<Q.stop){panMode=null;panV=0}
+    camDirty=true;return true;
+  }
+  if(panMode==='fling'){
+    view.tx+=panV*h;panV*=Math.exp(-h/Q.tau);
+    if(view.tx<panMin||view.tx>panMax)panMode='spring';
+    else if(Math.abs(panV)*kA<Q.stop){panMode=null;panV=0}
+  }
+  if(panMode==='spring'){
+    const b=clamp(view.tx,panMin,panMax);let x=(view.tx-b)*kA,v=panV*kA;
+    v+=(-Q.k*x-Q.c*v)*h;x=clamp(x+v*h,-Q.max,Q.max);view.tx=b+x/kA;panV=v/kA;
+    if(Math.abs(x)<.05&&Math.abs(v)<.005){view.tx=b;panV=0;panMode=null}
+  }
+  camDirty=true;return true;
+}
+/* 視点の動き：キーで回す、回したあとの慣性、なめらかな寄り */
+const VK={ArrowLeft:[1,0,0],ArrowRight:[-1,0,0],ArrowUp:[0,-1,0],ArrowDown:[0,1,0],PageUp:[0,0,1],PageDown:[0,0,-1]};
+const viewKey=k=>(k.src.has('kb')&&!k.kbMod)||k.src.has('ptr');   // 自分のキーボード（修飾キーなし）か、画面のキーを押し続けている
+function viewStep(h){
+  const Q=P.view;let a=0,b=0,c=0,held=false,mv=false;
+  for(const code in VK){const k=KEYS[code];if(viewKey(k)){const d=VK[code];a+=d[0];b+=d[1];c+=d[2];held=true}}
+  if(held&&(a||b)){
+    // 軽く叩いただけでは回らない（キーが沈むだけ）。押し続けると、keyDelay のあと keyRamp かけて速さが乗る
+    orbV.t+=h;const r=still?(orbV.t>=Q.keyDelay?1:0):sstep(Q.keyDelay,Q.keyDelay+Q.keyRamp,orbV.t);
+    // 回り始めたら、ホームへの戻り（とよける動き）は止める。中身は開いたまま
+    if(r>0&&!orbV.kb){orbV.kb=true;stopHoming()}
+    orbV.y=a*Q.key*r;orbV.e=b*Q.key*r;orbV.on=orbV.hold=true;orbV.tau=Q.keyTau;
+  }else{
+    orbV.t=0;orbV.kb=false;
+    if(orbV.hold){orbV.hold=false;if(still){orbV.on=false;orbV.y=orbV.e=0}}   // 離したら、慣性で止まる
+  }
+  if(held&&c)zoomT=clampZ(zoomT*Math.exp(c*Q.keyZoom*h));
+  if(orbV.on){
+    view.yaw+=orbV.y*h;const e=view.el+orbV.e*h;setEl(e);if(view.el!==e)orbV.e=0;
+    if(!orbV.hold){const f=Math.exp(-h/(orbV.tau||Q.tau));orbV.y*=f;orbV.e*=f;if(Math.hypot(orbV.y,orbV.e)<Q.stop){orbV.on=false;orbV.y=orbV.e=0}}
+    mv=true;
+  }
+  if(zoomT!==view.zoom){
+    // 寄る：時定数 wheelTau でなめらかに。zAnchor（カーソルの下の点）が動かないよう、注視点も寄せる
+    const z0=view.zoom;let z=still?zoomT:z0+(zoomT-z0)*(1-Math.exp(-h/Q.wheelTau));
+    if(Math.abs(Math.log(zoomT/z))<2e-4)z=zoomT;
+    view.zoom=z;
+    if(zAnchor){const r=z/z0;view.tx=zAnchor.x+(view.tx-zAnchor.x)/r;view.tz=zAnchor.z+(view.tz-zAnchor.z)/r;clampT()}
+    if(z===zoomT)zAnchor=null;
+    mv=true;
+  }else zAnchor=null;   // 寄り終わっている：前のカーソルの点は捨てる（残すと、次に PageUp/PageDown で寄るとき、古い点へ寄ってしまう）
+  if(mv)camDirty=true;
+  return mv;
+}
+function setViewNow(v){
+  stopHoming();Object.assign(view,v);clampView();zoomT=view.zoom;zAnchor=null;
+  orbV.on=orbV.hold=false;orbV.y=orbV.e=0;panMode=null;panV=0;camDirty=true;wake();
+}
+// 決まった向きへ寄せている途中（ホームへ戻る、裏を見る、よける）を止める
+function stopHoming(){if(homeTw){const i=TW.indexOf(homeTw);if(i>=0)TW.splice(i,1);homeTw=null}homing=dodging=false}
+// 決まった向きへ ms で寄せる。kind：'home'（ホームへ戻る）| 'dodge'（よける）| なし（裏を見る）。yaw は近い回り方で。慣性は止める
+function tweenView(to,ms,kind){
+  stopHoming();orbV.on=orbV.hold=false;orbV.y=orbV.e=0;panMode=null;panV=0;zAnchor=null;zoomT=view.zoom;
+  if(still||ms<=0){setViewNow(to);return}
+  const from={...view},end={...to},goal={...to,yaw:from.yaw+wrap(to.yaw-from.yaw)},e=bez(...P.view.homeEase);
+  homing=kind==='home';dodging=kind==='dodge';
+  homeTw=tween(ms,u=>{const k=e(u);for(const n in goal)view[n]=lerp(from[n],goal[n],k);
+    if(u>=1){Object.assign(view,end);homeTw=null;homing=dodging=false}zoomT=view.zoom;camDirty=true});
+  wake();
+}
+function goHome(){tweenView(homeView(),P.view.home,'home')}
+/* よける：文字（HTML）は画面に固定、キーボードは 3D で自由に動く。重なったときだけ、キーボードを少し動かす
+   R：開いている中身のラベルと中身を合わせた四角。K：キーボードの映った範囲。K と「R を m 広げた四角」が重なったら、
+   下へ（K の上端を R の下端 + m に）か右へ（K の左端を R の右端 + m に）、動かす量の小さいほう。どちらも画面に入らなければ、先に小さくする */
+function rbox(){
+  if(!open||panel.hidden)return null;
+  const a=label.getBoundingClientRect(),b=panel.getBoundingClientRect();
+  return[Math.min(a.left,b.left),Math.min(a.top,b.top),Math.max(a.right,b.right),Math.max(a.bottom,b.bottom)];
+}
+// 重なり（0.5px までの食いこみは、重なりとみなさない。よけた直後の誤差で、また動かないように）
+const hits=(K,R,m)=>K[0]<R[2]+m-.5&&K[2]>R[0]-m+.5&&K[1]<R[3]+m-.5&&K[3]>R[1]-m+.5;
+// 調べてよいのは、視点が止まっているとき（ドラッグ中・慣性・寄り・ホームへ戻る途中・よけている途中でない）
+const settled=()=>!intro&&!homeTw&&!orbV.on&&zoomT===view.zoom&&!panMode&&!(ptr&&/^(orbit|move|pan|pinch)$/.test(ptr.state));
+function dodge(){
+  dodgeNeed=false;
+  const R=rbox(),Q=P.dodge,m=dodgeM();if(!R||!hits(kbox(),R,m))return;
+  const v={...view};
+  // 動かしたあとの値で映し直して、下へ・右へのうち使えるもの（動かす量の小さいほう）
+  const plan=()=>{const K=kbox(v),dy=R[3]+m-K[1],dx=R[2]+m-K[0],o=[];
+    if(K[3]+dy<=H-Q.edge)o.push(['oy',dy]);if(K[2]+dx<=W-Q.edge)o.push(['ox',dx]);
+    return o.sort((a,b)=>a[1]-b[1])[0]};
+  let p=plan();
+  // どちらも入らない：下・右に空いている所に入る倍率のうち大きいほうを zoom に掛ける（下限まで）。透視で少しずれるので、入るまで数回
+  for(let i=0;!p&&i<4&&v.zoom>zRange()[0];i++){
+    const K=kbox(v),s=Math.max((H-Q.edge-(R[3]+m))/(K[3]-K[1]),(W-Q.edge-(R[2]+m))/(K[2]-K[0]));
+    v.zoom=clampZ(v.zoom*Math.min(1,s));p=plan();
+  }
+  if(!p)p=['oy',R[3]+m-kbox(v)[1]];   // 小さくしきっても入らない：下へ（文字を読めるほうを選ぶ）
+  v[p[0]]+=p[1];
+  tweenView(v,Q.ms,'dodge');
+}
+const shadeK=()=>sstep(P.view.shade[0],P.view.shade[1],view.el);   // 低い角度では床の影を消す（下から見上げたときは 0）
+function advance(dt){
+  // 「動いている」は、この advance でカメラが変わったかで見る（前から残っている描きなおしは、描くまで持ち越す）
+  let mv=false;const cd=camDirty;camDirty=false;
+  if(cap==='carry')carryGoal();
+  for(let left=dt;left>1e-9;){
+    const h=Math.min(2,left);left-=h;
+    // 先に時計を進めて予約を実行し、そのあとでばねと視点を進める
+    // （逆だと、最後の刻みで予約がキーを離したとき、ばねが動き出す前に busy が偽になって、キーが沈んだまま描画が寝る）
+    now+=h;fire();
+    if(springs(h))mv=true;if(swayStep(h))mv=true;if(panStep(h))mv=true;if(viewStep(h))mv=true;if(carryStep(h))mv=true;
+  }
+  for(let i=TW.length-1;i>=0;i--){const w=TW[i],u=clamp((now-w.t0)/w.ms,0,1);w.fn(u);if(u>=1)TW.splice(i,1);mv=true}
+  // よける：開いている間、視点が変わったら印を立てる（ここで見る。描く順番に頼らない）。調べるのは、印が立っていて、止まっているときだけ（1回調べたら印を下ろす）
+  if(open){const s=Object.values(view).join();if(s!==viewSig){viewSig=s;dodgeNeed=true}}
+  if(dodgeNeed&&open&&fitted&&settled())dodge();
+  apply();
+  moving=mv||cap==='flying'||camDirty;camDirty=camDirty||cd;
+  return busy();
+}
+const busy=()=>moving||intro||cap==='flying'||!!panMode||orbV.on||zoomT!==view.zoom||TW.length>0||EV.some(e=>e.fn);
+function apply(){
+  // 押した所に合わせて、わずかに傾く（沈みの深さに比例。k.tx・k.tz は押した点のずれ −1〜1）
+  const S=P.spring;
+  for(const k of LIST)if(k!==UP){
+    k.g.position.y=P.capY+k.y;
+    const m=k.tx||k.tz?(k.w>=2?P.tilt[1]:P.tilt[0])*D*clamp(-k.y/S.travel,0,1):0;k.g.rotation.set((k.tz||0)*m,0,-(k.tx||0)*m);
+  }
+  for(const b of BTN)b.mesh.position.y=b.y;
+  crossG.position.y=UP.y;
+  capPose();
+  const sk=shadeK();shades.forEach((m,i)=>{m.material.opacity=P.floor[i].alpha*fade*sk;m.visible=sk>0});
+}
+/* ---------- ↑ のキャップ ---------- */
+// 位置はキャップの原点（底の中心）か、中心（底から capTop/2）。床に置いたときの中心の高さは、表でも裏でも同じ
+const onPose=()=>[wx(UP.cu),P.capY+UP.y,wz(UP.cv)],offPose=()=>[capF.x,capBase()+(capF.down?capTop:0),capF.z];
+const onCenter=()=>{const o=onPose();o[1]+=capTop/2;return o},restY=()=>capBase()+capTop/2;
+const overCase=(x,z,g)=>Math.abs(x)<=-CX0+g&&Math.abs(z)<=-CZ0+g;   // ケースの輪郭を g 広げた範囲の中
+// キーの今の上面（↑ はむき出しの軸、丸いボタンはその頭）。キーと一緒に沈む
+const keyTop=k=>k===UP?P.carry.stem+UP.y:k.btn?1.2+k.y:P.capY+prof(k.row)[0]+k.y;
+// 置いたキャップの底の高さ：乗っているキーのうち、いちばん高い上面（毎回、今の沈みから出す）
+const capBase=()=>capF.ride&&capF.ride.length?Math.max(...capF.ride.map(c=>keyTop(KEYS[c]))):capF.y;
+// 着地点 (x, z) の真下の面：足元（中心 ±foot の四角）に重なるキー。なければケースの上面、ケースの外なら床
+function landAt(x,z){
+  if(!overCase(x,z,0))return{y:FLOOR,ride:[]};
+  const f=P.carry.foot,ride=[],over=(a,b,c,d)=>a<x+f&&c>x-f&&b<z+f&&d>z-f;
+  for(const k of LIST)if(k.rects.some(q=>over(wx(q[0]),wz(q[1]),wx(q[2]),wz(q[3]))))ride.push(k.code);
+  for(const b of BTN){const p=b.mesh.position,r=6.5;if(over(p.x-r,p.z-r,p.x+r,p.z+r))ride.push(b.code)}
+  return{y:0,ride};
+}
+const placeCap=(x,z,yaw,down)=>{const L=landAt(x,z);return{x,z,yaw,down,y:L.y,ride:L.ride}};
+const NO_TILT=[0,0],capQ=new THREE.Quaternion(),tiltQ=new THREE.Quaternion(),capE=new THREE.Euler(),AX=new V3();
+// 中心 c、向き yaw（rad）、裏返し f（rad）、傾き tilt（°。上が倒れる向きと大きさ）で置く。回すのは中心のまわり
+function poseCap(c,yaw,f,tilt){
+  capE.set(f,yaw,0,'YXZ');capQ.setFromEuler(capE);
+  const L=Math.hypot(tilt[0],tilt[1]);if(L>1e-6){AX.set(tilt[1]/L,0,-tilt[0]/L);tiltQ.setFromAxisAngle(AX,L*D);capQ.premultiply(tiltQ)}
+  capG.quaternion.copy(capQ);V.set(0,capTop/2,0).applyQuaternion(capQ);capG.position.set(c[0]-V.x,c[1]-V.y,c[2]-V.z);
+}
+// つかんでいる間の状態。c：中心、v：横の速さ（mm/ms）、h：高さ、g・hg・yg：目標、off：つかんだ所と中心のずれ、cx・cy：ポインター、direct：T で運ぶ先
+const carry={c:[0,0,0],v:[0,0],h:0,g:[0,0],hg:0,yaw:0,yaw0:0,yg:0,tilt:[0,0],f0:0,t0:0,snap:false,off:[0,0],cx:0,cy:0,direct:null,trail:[]};
+const carryF=()=>carry.f0*(1-(still?1:inOut(clamp((now-carry.t0)/P.carry.flip,0,1))));   // 表に返す
+function startCarry(c,f0,yaw,cx,cy){
+  cap='carry';capKind=null;
+  Object.assign(carry,{c:[...c],v:[0,0],h:c[1],hg:c[1],g:[c[0],c[2]],yaw,yaw0:yaw,yg:yaw,tilt:[0,0],f0,t0:now,snap:false,direct:null,off:[0,0],trail:[[now,c[0],c[2]]]});
+  if(cx==null)carry.direct=[c[0],c[2]];
+  else{const q=rayAt(cx,cy,c[1]);if(q)carry.off=[c[0]-q.x,c[2]-q.z];carry.cx=cx;carry.cy=cy}   // つかんだ所のずれは保つ（飛びつかせない）
+  carryGoal();wake();
+}
+function grabCap(cx,cy){if(cap!=='off')return false;startCarry([capF.x,restY(),capF.z],capF.down?Math.PI:0,capF.yaw,cx,cy);return true}
+function pullCap(cx,cy){
+  if(cap!=='on')return false;
+  startCarry(onCenter(),0,0,cx,cy);dispatchEvent(new CustomEvent('taq:cap',{detail:{on:false}}));return true;
+}
+// 目標：ポインターの線が「運ぶ高さ」の水平面に当たる点。ケースの上か・軸に吸いつくかは、高さの決まった面で見る（今の高さが変わっても行ったり来たりしない）
+function carryGoal(){
+  const Q=P.carry,c=carry,ax=wx(UP.cu),az=wz(UP.cv);
+  let sx,sz,gx,gz,kx,kz;
+  if(c.direct){[sx,sz]=c.direct;gx=kx=sx;gz=kz=sz}
+  else{
+    // 吸いつくかは、吸いついたときの高さの面で見る（画面で軸の上に重ねたら吸いつく）
+    const q=rayAt(c.cx,c.cy,Q.over+capTop/2),g=rayAt(c.cx,c.cy,c.h),k=rayAt(c.cx,c.cy,onCenter()[1]+Q.above);if(!q||!g||!k)return;   // 面に当たらない：目標はそのまま
+    sx=q.x+c.off[0];sz=q.z+c.off[1];gx=g.x+c.off[0];gz=g.z+c.off[1];kx=k.x+c.off[0];kz=k.z+c.off[1];
+  }
+  const over=overCase(sx,sz,Q.grow);
+  c.snap=Math.hypot(kx-ax,kz-az)<Q.snap*U;
+  if(c.snap){gx=ax;gz=az}
+  const B=Q.box;c.g=[clamp(gx,CX0+B[0],-CX0+B[1]),clamp(gz,CZ0+B[2],-CZ0+B[3])];
+  c.hg=c.snap?onCenter()[1]+Q.above:(over?Q.over:FLOOR+Q.desk)+capTop/2;
+  c.yg=c.snap?0:c.yaw0;
+}
+function carryStep(h){
+  if(cap!=='carry')return false;
+  const Q=P.carry,c=carry;
+  if(still){c.c[0]=c.g[0];c.c[2]=c.g[1];c.h=c.hg;c.v=[0,0];c.yaw=c.yg;c.tilt=[0,0]}   // 動きを減らす設定：遅れ・傾きなし
+  else{
+    // 位置：臨界減衰のばね。高さと向き：なめらかに。傾き：速さに応じて、進む向きと逆に
+    const w=Q.w;for(let i=0;i<2;i++){const j=i*2;c.v[i]+=(w*w*(c.g[i]-c.c[j])-2*w*c.v[i])*h;c.c[j]+=c.v[i]*h}
+    c.h+=(c.hg-c.h)*(1-Math.exp(-h/Q.hTau));
+    c.yaw+=wrapR(c.yg-c.yaw)*(1-Math.exp(-h/Q.yawTau));
+    const s=Math.hypot(c.v[0],c.v[1]),a=s>1e-6?Math.min(s*Q.tilt[0],Q.tilt[1])/s:0,k=1-Math.exp(-h/Q.tilt[2]);
+    c.tilt[0]+=(-c.v[0]*a-c.tilt[0])*k;c.tilt[1]+=(-c.v[1]*a-c.tilt[1])*k;
+  }
+  c.c[1]=c.h;
+  c.trail.push([now+h,c.c[0],c.c[2]]);while(c.trail.length>2&&c.trail.at(-1)[0]-c.trail[0][0]>Q.vel)c.trail.shift();
+  const rest=!(c.f0&&!still&&now-c.t0<Q.flip)&&Math.hypot(c.g[0]-c.c[0],c.g[1]-c.c[2])<.01&&Math.hypot(c.v[0],c.v[1])<1e-4
+    &&Math.abs(c.hg-c.h)<.01&&Math.abs(wrapR(c.yg-c.yaw))<1e-4&&Math.hypot(c.tilt[0],c.tilt[1])<.01;
+  if(rest){if(c.v[0]||c.v[1]||c.tilt[0]||c.tilt[1]||c.c[0]!==c.g[0]){c.c[0]=c.g[0];c.c[2]=c.g[1];c.c[1]=c.h=c.hg;c.v=[0,0];c.tilt=[0,0];c.yaw=c.yg;return true}return false}
+  return true;
+}
+// 離す：吸いついていたら押し込んではまる。そうでなければ落とす／投げる（cancel：その場で落とす）
+function dropCap(cancel){
+  if(cap!=='carry')return;
+  const Q=P.carry,c=carry,from={c:[...c.c],yaw:c.yaw,tilt:[...c.tilt],f:carryF()};
+  if(c.snap&&!cancel){capFrom={...from,T:Q.seat};cap='flying';capKind='seat';capT0=now;wake();return}
+  let v=[0,0];const tr=c.trail;
+  if(!cancel&&!still&&tr.length>1){const a=tr[0],b=tr.at(-1),dt=b[0]-a[0];if(dt>0){v=[(b[1]-a[1])/dt,(b[2]-a[2])/dt];const s=Math.hypot(v[0],v[1]);if(s>Q.vmax)v=v.map(u=>u*Q.vmax/s)}}
+  const sp=Math.hypot(v[0],v[1]),B=Q.box;
+  const x=clamp(c.c[0]+v[0]*Q.lead,CX0+B[0],-CX0+B[1]),z=clamp(c.c[2]+v[1]*Q.lead,CZ0+B[2],-CZ0+B[3]);
+  const d=Math.hypot(x-c.c[0],z-c.c[2]),flip=!still&&sp>Q.flipV;
+  // 向き：投げた横の向き（画面の左右）に回る
+  const side=Math.sign(v[0]*Math.cos(view.yaw*D)-v[1]*Math.sin(view.yaw*D))||1,yaw1=still?c.yaw:c.yaw+side*(Q.spin[0]+Q.spin[1]*sp)*D;
+  capF=placeCap(x,z,yaw1,flip);
+  const y1=restY();
+  capFrom={...from,c1:[x,y1,z],yaw1,f1:flip?Math.PI:0,apex:Math.max(c.c[1],y1)+Q.apex[0]+sp*Q.apex[1],
+    T:still?Q.still:clamp(Q.fly[0]+d*Q.fly[1],Q.fly[0],Q.fly[2]),still};
+  cap='flying';capKind='drop';capT0=now;wake();
+}
+function capPose(){
+  const Q=P.cap,on=onPose(),off=offPose();let p,f,yw,vis=true,set=false;
+  if(cap==='on'){p=on;f=0;yw=0}
+  else if(cap==='off'){poseCap([capF.x,restY(),capF.z],capF.yaw,capF.down?Math.PI:0,NO_TILT);set=true}
+  else if(cap==='carry'){poseCap(carry.c,carry.yaw,carryF(),carry.tilt);set=true}
+  else{
+    const t=now-capT0,S=capFrom,k=capKind,Bo=P.carry.bounce;
+    const total=k==='seat'?S.T:k==='drop'?S.T+(S.still?0:Bo[1]):still?Q.still:k==='on'?Q.on:Q.off[0]+Q.off[1]+Q.off[2];
+    if(t>=total){
+      cap=k==='on'||k==='seat'?'on':'off';capKind=null;saveCap();   // 止まった：置き場所を覚える
+      if(k==='seat'&&!still){UP.y=-P.carry.dip;UP.v=0}   // はまった瞬間、↑ のキーを少し沈ませて、ばねで戻す
+      if(k!=='drop')dispatchEvent(new CustomEvent('taq:cap',{detail:{on:cap==='on'}}));
+      wake();return capPose();
+    }
+    set=true;
+    if(k==='seat'){
+      // 押し込んではまる
+      const u=clamp(t/S.T,0,1),e=u*u,o=onCenter(),r=1-e;
+      poseCap(S.c.map((v,i)=>lerp(v,o[i],e)),wrapR(S.yaw)*r,S.f*r,[S.tilt[0]*r,S.tilt[1]*r]);
+    }else if(k==='drop'){
+      // 落とす／投げる：横は等速、高さは1本の放物線（頂点 apex）、着地で1回だけ跳ねる
+      const u=Math.min(1,t/S.T),c0=S.c,c1=S.c1;let y;
+      if(S.still)y=lerp(c0[1],c1[1],u);
+      else if(t<S.T){const a=Math.sqrt(Math.max(0,S.apex-c0[1])),b=Math.sqrt(Math.max(0,S.apex-c1[1])),pk=a+b>0?a/(a+b):0;
+        y=u<pk?S.apex-(S.apex-c0[1])*(1-u/pk)**2:S.apex-(S.apex-c1[1])*((u-pk)/(1-pk))**2}
+      else y=c1[1]+Bo[0]*Math.sin(Math.PI*Math.min(1,(t-S.T)/Bo[1]));
+      const r=S.still?1:inOut(u),fd=1-inOut(Math.min(1,u*2));
+      poseCap([lerp(c0[0],c1[0],u),y,lerp(c0[2],c1[2],u)],lerp(S.yaw,S.yaw1,u),lerp(S.f,S.f1,r),[S.tilt[0]*fd,S.tilt[1]*fd]);
+    }else set=false;
+    if(set){}
+    else if(still){vis=false;p=S.p;f=0;yw=0}
+    else if(capKind==='on'){
+      // 戻る：横は cubic-bezier、高さは 42% で最高の放物線、途中で裏返しと向きを戻し、最後に 2mm 降りてはまる
+      // （キーボードの上から戻るときは、そこから lift だけは上がる）
+      const T1=Q.on-Q.seat[0],u=Math.min(1,t/T1),e=bez(...Q.ease)(u),yP=Math.max(FLOOR+Q.peak,S.p[1]+Q.lift),y1=on[1]+Q.seat[1];
+      let y=u<Q.peakAt?lerp(S.p[1],yP,1-(1-u/Q.peakAt)**2):lerp(yP,y1,((u-Q.peakAt)/(1-Q.peakAt))**2);
+      if(t>T1)y=y1-Q.seat[1]*(t-T1)/Q.seat[0];
+      const r=inOut(clamp((t/Q.on-Q.turn[0])/(Q.turn[1]-Q.turn[0]),0,1));
+      p=[lerp(S.p[0],on[0],e),y,lerp(S.p[2],on[2],e)];f=S.f*(1-r);yw=S.yw*(1-r);
+    }else{
+      // 外れる：上へ抜けて、放物線で床へ、裏返って、1回だけ跳ねる
+      const [a,b,c]=Q.off;
+      if(t<a){p=[S.p[0],S.p[1]+Q.lift*outQ(t/a),S.p[2]];f=0;yw=0}
+      else if(t<a+b){const u=(t-a)/b,r=inOut(u);p=[lerp(S.p[0],off[0],u),lerp(S.p[1]+Q.lift,off[1],u)+4*Q.arc*u*(1-u),lerp(S.p[2],off[2],u)];f=Math.PI*r;yw=capF.yaw*r}
+      else{p=[off[0],off[1]+Q.bounce*Math.sin(Math.PI*Math.min(1,(t-a-b)/c)),off[2]];f=Math.PI;yw=capF.yaw}
+    }
+  }
+  capG.visible=vis;if(!set){capG.position.set(...p);capG.rotation.set(f,yw,0,'YXZ')}
+  // 床の影：キャップの真下が机のときだけ出す（ケースの上では、影の地図の影が落ちる）。低い角度では消す
+  V.set(0,capTop/2,0).applyQuaternion(capG.quaternion).add(capG.position);
+  const C=P.capShadow,sf=FLOOR,lift=Math.max(0,V.y-capTop/2-sf),sk=shadeK();
+  blob.visible=vis&&cap!=='on'&&sk>0&&!overCase(V.x,V.z,0);blob.position.set(V.x,sf+.06,V.z);blob.scale.setScalar(1+lift/C.grow);blob.material.opacity=C.alpha*clamp(1-lift/C.fade,0,1)*sk;
+}
+function fly(kind){
+  if(kind==='on')capFrom={p:offPose(),yw:wrapR(capF.yaw),f:capF.down?Math.PI:0};   // 今ある場所から
+  else{capFrom={p:onPose()};floorYaw=P.cap.yaw+P.cap.wobble[capN++%P.cap.wobble.length];capF={x:CAPX,z:CAPZ,yaw:floorYaw*D,down:true,y:FLOOR,ride:[]}}
+  cap='flying';capKind=kind;capT0=now;wake();
+}
+const clickCap=()=>{if(cap==='off')fly('on')};
+function setCap(s){cap=s;capKind=null;capPose()}
+/* ↑ のキャップの置き場所を覚える（見に来た人のブラウザの中だけ。どこにも送らない）
+   止まったとき（置いた・投げた・はめた・外れた）に保存して、次に来たときに、同じ場所・向き・表裏で置いておく。はめていたら、はまったまま。
+   保存できない（プライベートな窓など）ときは、何もしないで、いつもの場所から始める */
+const CAP_KEY='taq.cap';
+let capSave=true;   // 確認用：selfTest の間は、見に来た人の保存を書きかえない
+function saveCap(){
+  if(!capSave)return;
+  const s=cap==='on'?{v:1,on:true}:{v:1,on:false,x:+capF.x.toFixed(2),z:+capF.z.toFixed(2),yaw:+capF.yaw.toFixed(4),down:!!capF.down};
+  try{localStorage.setItem(CAP_KEY,JSON.stringify(s))}catch{}
+}
+function loadCap(){
+  let s=null;try{s=JSON.parse(localStorage.getItem(CAP_KEY)||'null')}catch{}
+  if(!s||s.v!==1)return;
+  if(s.on===true){setCap('on');return}
+  if(![s.x,s.z,s.yaw].every(Number.isFinite))return;
+  const B=P.carry.box;   // 範囲の外の値（版が変わった、書きかえられた）は、範囲の中へ
+  capF=placeCap(clamp(s.x,CX0+B[0],-CX0+B[1]),clamp(s.z,CZ0+B[2],-CZ0+B[3]),s.yaw,!!s.down);setCap('off');
+}
+// 描くのは動いているときだけ
+let raf=0,last=0,dirty=true;
+function render(){dirty=false;if(camDirty)place();renderer.render(scene,cam)}
+function frame(t){
+  // raf=-1：この frame の途中で wake() が呼ばれても、もう1本ループを作らない（最後に、まだ動いていれば次を1本だけ予約する）
+  raf=-1;const dt=last?Math.min(t-last,50):16;last=t;
+  const b=advance(dt);if(moving||dirty||camDirty)render();
+  raf=b?requestAnimationFrame(frame):0;if(!b)last=0;
+}
+function wake(){dirty=true;if(ready&&!raf)raf=requestAnimationFrame(frame)}
+
+/* ---------- 開いたときの動き ---------- */
+function startIntro(){
+  finishIntro();
+  if(still)return;
+  const I=P.intro,name=DATA.name,lt=I.letters;
+  intro=true;nameEl.textContent='';fade=0;
+  introTw.push(tween(I.fade,u=>fade=bez(...I.fadeEase)(u)));
+  // 左上の名前を1文字ずつ出す。キーボードのキーは打たない
+  // （08。taq「入ったときに taq ってキーボードが動くのはやめて。左上がそう入力される風なのは別にいい」）
+  [...name].forEach((_,i)=>{
+    const t=lt[Math.min(i,lt.length-1)]+Math.max(0,i-lt.length+1)*(lt[1]-lt[0]);
+    introEv.push(at(t,()=>nameEl.textContent=name.slice(0,i+1)));
+  });
+  if(mode==='phone'){const e=bez(...I.panEase),h=panHome;introTw.push(tween(I.pan,u=>{if(mode!=='phone')return;view.tx=h+I.panFrom*(1-e(u));camDirty=true}))}
+  else{
+    // pc：キーボードが少し回って止まる（回せることの手がかり）
+    const R=I.view,e=bez(...R.ease),h=homeView();
+    const f=u=>{if(mode!=='pc')return;const k=e(u);Object.assign(view,{tx:h.tx,tz:h.tz,yaw:h.yaw+R.yaw*(1-k),el:h.el+R.el*(1-k),zoom:lerp(R.zoom,1,k)});zoomT=view.zoom;camDirty=true};
+    f(0);introTw.push(tween(R.ms,f));if(ready)render();   // 最初の1枚からその向きで描く
+  }
+  introEv.push(at(I.end,finishIntro));
+  wake();
+}
+function finishIntro(){
+  for(const e of introEv)e.fn=null;introEv=[];
+  for(const w of introTw){const i=TW.indexOf(w);if(i>=0)TW.splice(i,1)}introTw=[];
+  if(intro&&mode==='phone'){view.tx=panHome;camDirty=true}
+  if(intro&&mode==='pc')setViewNow(homeView());   // 途中で何か押されたら、すぐホームの値にする
+  intro=false;fade=1;nameEl.textContent=DATA.name;wake();
+}
+
+/* ---------- 入力 ---------- */
+let touched=false;   // 見に来た人がもう何か押したか（押していたら、開いたときの動きはやらない）
+let capAt='off';     // ↑ を押し始めたときのキャップの状態
+function press(code,src,doAct){
+  const k=KEYS[code];if(!k)return;
+  if(code==='ArrowUp'&&(cap==='flying'||cap==='carry'))return;   // キャップが飛んでいる・つかまれている間の ↑ は無視
+  if(k===UP&&!k.src.size)capAt=cap;
+  if(src!=='ptr')k.tx=k.tz=0;   // 傾くのは、マウスと指で押したときだけ
+  // PageUp / PageDown は押した瞬間から寄るので、ここでホームへの戻りを止める（矢印は、回り始めたときに viewStep が止める）
+  if((code==='PageUp'||code==='PageDown')&&(src==='ptr'||(src==='kb'&&!k.kbMod)))startMove();
+  k.src.add(src);if(doAct)act(code);if(code==='Space')spaceCursor();wake();
+}
+function release(code,src,quiet){
+  const k=KEYS[code];if(!k||!k.src.has(src))return;
+  k.src.delete(src);
+  // 離したときに外れる。ただし、押し始めたときにキャップがはまっていた場合だけ（押したままキャップを戻しても、離して外れはしない）
+  if(k===UP&&!k.src.size&&cap==='on'&&capAt==='on'&&!quiet)fly('off');
+  if(code==='Space')spaceCursor();
+  wake();
+}
+// 全部離す（blur など）。ポインターの途中なら片づける（つかんでいたら、その場で落とす）
+function releaseAll(){
+  if(ptr)endPtr({pointerId:ptr.id},true);ptr=null;pts.clear();mouseHeld=false;
+  for(const k of SPR)k.src.clear();for(const c in watch){if(watch[c])watch[c].fn=null;delete watch[c]}wake();
+}
+// カーソル・フォーカス・指が乗っているキー
+function setHov(code,src,instant){
+  code=code||null;if(code===hov&&(code?src===hovSrc:true))return;
+  if(hov&&hovReady&&wordOf(hov)){lastOff=now;lastOffWall=performance.now()}
+  if(hovEv){hovEv.fn=null;hovEv=null}
+  hov=code;hovSrc=code?src:null;hovReady=false;mute=null;
+  // 「さっきまで別のラベルが出ていた」は、止まっていても進む本物の時計でも確かめる（中の時計は、何も動いていない間は止まる）
+  if(code){if(instant||(now-lastOff<=P.time.again&&performance.now()-lastOffWall<=P.time.again))hovReady=true;else hovEv=at(P.time.hover,()=>{hovEv=null;hovReady=true;updLabel()})}
+  updLabel();wake();
+}
+
+// 自分のキーボード（KeyboardEvent.code で対応）
+const ALIAS={AltRight:'Fn',Lang2:'NonConvert',Lang1:'Convert',NumpadEnter:'Enter'};
+const TAPS=new Set(['CapsLock','KanaMode','Convert','NonConvert','Lang1','Lang2']),IME=new Set(['Process','ZenkakuHankaku','Hankaku','Zenkaku']);
+const PREV=new Set(['Space','Quote','Slash','AltLeft','AltRight','ContextMenu']),PREVF=new Set(['F1','F3','F7','F10','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','PageUp','PageDown','Home','End']);
+const CHAR=/^(Key.|Digit.|Minus|Equal|IntlYen|IntlRo|BracketLeft|BracketRight|Semicolon|Quote|Backslash|Backquote|Comma|Period|Slash|Space)$/;
+const watch={};
+// 見張り：3 秒たったら戻す。そのあとに来る keyup は捨てる（k.wd。もう一度沈ませない）
+function kick(code){if(watch[code])watch[code].fn=null;watch[code]=at(P.time.watch,()=>{delete watch[code];KEYS[code].wd=true;release(code,'kb')})}
+function kbDown(raw,key,repeat,mod,shield){
+  const code=ALIAS[raw]||raw,k=KEYS[code];if(!k)return;
+  if(intro)finishIntro();
+  if(repeat){if(k.src.has('kb'))kick(code);return}
+  touched=true;k.wd=false;k.dead=false;
+  if(code==='ArrowUp'&&(cap==='flying'||cap==='carry')){k.dead=true;return}   // キャップが飛んでいる・つかまれている間の ↑ は無視。あとから来る keyup も捨てる
+  const tapish=TAPS.has(raw)||(raw==='Backquote'&&IME.has(key))||(mod&&CHAR.test(code));
+  k.tapped=tapish;k.tapT=performance.now();k.kbMod=mod;
+  press(code,'kb',!mod&&!shield);
+  if(tapish)at(P.time.tap,()=>release(code,'kb'));else kick(code);
+}
+function kbUp(raw){
+  const code=ALIAS[raw]||raw,k=KEYS[code];if(!k)return;
+  if(watch[code]){watch[code].fn=null;delete watch[code]}
+  if(k.wd||k.dead){k.wd=k.dead=false;return}
+  // 「軽く叩いた」扱いのキーの keyup は捨てる。ただし、ずっとあとに keyup だけが来たら（Mac の CapsLock は、オフにするとき keyup しか来ない）、下の「軽く叩いた」にする
+  if(k.tapped){k.tapped=false;if(performance.now()-k.tapT<700)return}
+  if(!k.src.has('kb')){press(code,'kb',false);at(P.time.tap,()=>release(code,'kb'));return}   // 沈んでいないキーの keyup（PrintScreen）
+  release(code,'kb');
+}
+let enterRepeat=false;
+// ランプの小窓：見に来た人の CapsLock（左）と ScrollLock（右）。キーのイベントが来るたびに見る
+function lamps(e){
+  if(!e.getModifierState)return;const s=[e.getModifierState('CapsLock'),e.getModifierState('ScrollLock')];
+  if(s[0]!==lampOn[0]||s[1]!==lampOn[1]){lampOn=s;lampLook();wake()}
+}
+addEventListener('keyup',lamps);
+canvas.addEventListener('pointerdown',lamps);   // ほかの窓で CapsLock を切り替えて戻ってきたときも、次に触ったときに合わせる
+addEventListener('keydown',e=>{
+  lamps(e);
+  const ae=document.activeElement,onBody=!ae||ae===document.body,mod=e.ctrlKey||e.altKey||e.metaKey;
+  if(onBody&&(PREV.has(e.code)||(!mod&&PREVF.has(e.code))))e.preventDefault();
+  const shield=['Enter','Space','NumpadEnter'].includes(e.code)&&!!ae?.closest?.('.sr,.panel');
+  enterRepeat=e.repeat&&(e.code==='Enter'||e.code==='NumpadEnter');
+  kbDown(e.code,e.key,e.repeat,mod,shield);
+});
+addEventListener('keyup',e=>kbUp(e.code));
+addEventListener('blur',releaseAll);
+document.addEventListener('visibilitychange',()=>{if(document.hidden)releaseAll()});
+
+// マウスと指
+// ポインターの状態 ptr.state：press（キー）| empty（何もない所）| capPress（床のキャップ）| orbit（回す）| pan（phone の横パン）| carry（キャップをつかんでいる）| pinch（2本指）| off（何もしない）
+// どの状態も、pointerup・pointercancel・lostpointercapture・blur（releaseAll）・ボタンが離れているのに動いた、のどれでも endPtr で片づく
+const ray=new THREE.Raycaster(),ndc=new THREE.Vector2(),plane=new THREE.Plane(new V3(0,1,0),0),cPlane=new THREE.Plane(new V3(0,1,0),0);
+let pickHit=null;   // 最後に pick で当たった点（キーの傾きに使う）
+function setRay(cx,cy){const r=canvas.getBoundingClientRect();ndc.set((cx-r.left)/r.width*2-1,1-(cy-r.top)/r.height*2);ray.setFromCamera(ndc,cam)}
+function pick(cx,cy,fb){
+  setRay(cx,cy);
+  const hit=ray.intersectObjects(HIT,false)[0];pickHit=hit||null;
+  if(hit){const c=hit.object.userData.code;return c==='capG'?(cap==='on'?'ArrowUp':cap==='off'?'cap':null):c}
+  if(!fb)return null;
+  // 指：上面の高さの平面に落として、0.62u 以内でいちばん近いキー
+  plane.constant=-P.phone.hitY;if(!ray.ray.intersectPlane(plane,V))return null;
+  let best=null,bd=P.phone.near*U;
+  for(const k of LIST)for(const q of k.rects){const dx=Math.max(wx(q[0])-V.x,0,V.x-wx(q[2])),dz=Math.max(wz(q[1])-V.z,0,V.z-wz(q[3])),d=Math.hypot(dx,dz);if(d<bd){bd=d;best=k.code}}
+  return best;
+}
+// ポインターの線が高さ y の水平面に当たる点（当たらなければ null）
+function rayAt(cx,cy,y){setRay(cx,cy);cPlane.constant=-y;return ray.ray.intersectPlane(cPlane,new V3())}
+// 押した点がキーの中心からどれだけずれているか（−1〜1）。傾きは apply で、沈みの深さに比例してかける
+function tiltAt(code,hit){
+  const k=KEYS[code];if(!k||k.btn||k===UP)return;k.tx=k.tz=0;if(!hit)return;
+  const l=k.g.worldToLocal(V.copy(hit.point));k.tx=clamp(l.x/((k.kind==='caps'?1.75:k.w)*U/2),-1,1);k.tz=clamp(l.z/(U/2),-1,1);
+}
+let ptr=null,lastTouch=false,mouseHeld=false,lastEmpty=-1e9,lastEmptyWall=-1e9;
+const pts=new Map();   // 指ごとの位置（2本指で使う）
+function hoverAt(cx,cy){
+  lastMouse=[cx,cy];
+  const hit=pick(cx,cy,false),c=hit==='cap'?null:hit;
+  canvas.style.cursor=spaceHeld()||hit==='cap'||!hit?'grab':live(hit)?'pointer':'';
+  if(c!==hov||hovSrc!=='mouse')setHov(c,'mouse');
+}
+// Space を押している間（自分のキーボード）。カーソルは grab にする。離したら、カーソルの下に合わせて戻す
+const spaceHeld=()=>KEYS.Space.src.has('kb');
+let lastMouse=null,ctxBlock=false;
+function spaceCursor(){if(ptr||!lastMouse)return;if(spaceHeld())canvas.style.cursor='grab';else hoverAt(...lastMouse)}
+canvas.addEventListener('pointerdown',e=>{
+  lastTouch=e.pointerType==='touch';touched=true;
+  const mouse=e.pointerType==='mouse';
+  if(!mouse)pts.set(e.pointerId,[e.clientX,e.clientY]);
+  // 前の「離した」が届いていなかったら、ここで片づける（届かないままだと、以後の入力が全部無視される）
+  if(ptr&&(ptr.mouse?mouse:!mouse&&e.isPrimary&&e.pointerId!==ptr.id&&!(ptr.ids&&ptr.ids.includes(e.pointerId)))){
+    endPtr({pointerId:ptr.id},true);for(const id of [...pts.keys()])if(id!==e.pointerId)pts.delete(id);
+  }
+  if(ptr){
+    // 2本目の指：1本目の押しかけは静かに取り消して、2本で動かす（キャップをつかんでいる間は何もしない）
+    if(!mouse&&!ptr.mouse&&pts.has(ptr.id)&&!['carry','pinch','off'].includes(ptr.state)){
+      try{canvas.setPointerCapture(e.pointerId)}catch{}
+      cancelPtr(ptr);startPinch(ptr.id,e.pointerId);
+    }
+    return;
+  }
+  if(mouse&&e.button!==0&&e.button!==2)return;
+  if(intro)finishIntro();
+  // 右ボタン、または Space を押しながらの左ボタン：どこから引いても、注視点を動かす（キーは沈めない・つかまない）
+  if(mouse&&(e.button===2||spaceHeld())){
+    try{canvas.setPointerCapture(e.pointerId)}catch{}
+    orbV.on=false;orbV.y=orbV.e=0;if(e.button===2)ctxBlock=false;
+    ptr={id:e.pointerId,mouse,x0:e.clientX,y0:e.clientY,lx:e.clientX,ly:e.clientY,code:null,src:'ptr',up:false,state:'look',right:e.button===2,trail:[]};
+    mouseHeld=true;return;
+  }
+  const hit=pick(e.clientX,e.clientY,!mouse&&mode==='phone'),ph=pickHit;
+  try{canvas.setPointerCapture(e.pointerId)}catch{}
+  orbV.on=false;orbV.y=orbV.e=0;   // 触ったら、回っている慣性は止まる
+  if(!mouse){panMode=null;panV=0}
+  // はまっている ↑ を押したときは、キーとしては沈むが、視点は動かさない（src 'cap'）
+  const up=hit==='ArrowUp'&&cap==='on';
+  ptr={id:e.pointerId,mouse,x0:e.clientX,y0:e.clientY,lx:e.clientX,ly:e.clientY,code:hit==='cap'?null:hit,src:up?'cap':'ptr',up,
+       state:hit==='cap'?'capPress':hit?'press':'empty',trail:[]};
+  if(mouse)mouseHeld=true;
+  // キーは押した瞬間に沈む。「働き」は離したときに出す
+  if(ptr.code){if(mouse)mute=hit;press(hit,ptr.src,false);tiltAt(hit,ph);if(!mouse)setHov(hit,'touch',true)}
+});
+canvas.addEventListener('pointermove',e=>{
+  if(pts.has(e.pointerId))pts.set(e.pointerId,[e.clientX,e.clientY]);
+  if(ptr&&ptr.mouse&&e.pointerType==='mouse'&&e.buttons===0)endPtr({pointerId:ptr.id},true);   // ボタンはもう離れている（「離した」が届かなかった）
+  if(ptr){
+    if(ptr.state==='pinch'){if(ptr.ids.includes(e.pointerId))pinchMove(e.timeStamp);return}
+    if(e.pointerId===ptr.id)dragMove(e.clientX,e.clientY,e.timeStamp,e.shiftKey);
+    return;
+  }
+  if(e.pointerType!=='mouse')return;
+  hoverAt(e.clientX,e.clientY);
+  if(mode==='pc'&&!still){
+    const d=P.pc.dead*2,s=u=>Math.sign(u)*sstep(d,1,Math.abs(u));
+    sway.tx=s(e.clientX/W*2-1);sway.ty=s(e.clientY/H*2-1);sway.back=false;wake();
+  }
+});
+canvas.addEventListener('pointerleave',e=>{
+  if(e.pointerType!=='mouse'||mouseHeld)return;
+  if(hovSrc==='mouse')setHov(null);canvas.style.cursor='';lastMouse=null;
+  sway.tx=sway.ty=0;sway.back=true;wake();
+});
+// 回す・寄せる・動かす、を始めた：ホームへの戻り（とよける動き）は止める。中身は開いたまま
+const startMove=stopHoming;
+function dragMove(x,y,t,shift){
+  const p=ptr,Q=P.view;
+  if(p.state==='look'){
+    // 右ボタン・Space：slop を越えたら、画面の上でずらし始める（慣性なし）
+    if(Math.hypot(x-p.x0,y-p.y0)<Q.slop)return;
+    p.state='move';p.lx=p.x0;p.ly=p.y0;setHov(null);startMove();canvas.style.cursor='grabbing';
+  }
+  if(p.state==='move'){slide(x-p.lx,y-p.ly);p.lx=x;p.ly=y;return}
+  if(p.state==='press'||p.state==='empty'||p.state==='capPress'){
+    const dx=x-p.x0,dy=y-p.y0;if(Math.hypot(dx,dy)<(p.mouse?Q.slop:P.pan.slop))return;
+    if(p.state==='capPress')p.state=grabCap(p.x0,p.y0)?'carry':'off';   // 床のキャップ：つかむ
+    else if(p.up){release('ArrowUp','cap',true);p.state=pullCap(p.x0,p.y0)?'carry':'off'}   // はまっている ↑：引き抜いて、つかむ
+    else if(p.state==='press'&&!p.mouse&&mode==='phone'){
+      // phone の指でキーから：横に動かすとパン（今までどおり）
+      release(p.code,p.src,true);setHov(null);
+      const ps=posed();
+      p.state=Math.abs(dx)>Math.abs(dy)&&(!ps||panMin<panMax)?'pan':'off';
+      if(p.state==='pan'){stopHoming();p.ax=ps?null:[Math.cos(view.yaw*D),-Math.sin(view.yaw*D)];p.tx0=view.tx;p.tz0=view.tz;p.trail=[[t,x]]}
+    }else{
+      // 回す（キーからでも。キーは静かに戻し、「働き」は出さない）
+      if(p.code)release(p.code,p.src,true);setHov(null);
+      p.state='orbit';p.lx=p.x0;p.ly=p.y0;p.trail=[[t,view.yaw,view.el]];startMove();
+    }
+    if(p.mouse&&(p.state==='carry'||p.state==='orbit'))canvas.style.cursor='grabbing';
+  }
+  if(p.state==='orbit'){
+    const dx=x-p.lx,dy=y-p.ly;p.lx=x;p.ly=y;
+    if(shift)slide(dx,dy);
+    else{view.yaw-=dx*Q.orbit;setEl(view.el+dy*Q.orbit);p.trail.push([t,view.yaw,view.el]);while(p.trail.length>2&&t-p.trail[0][0]>Q.vel)p.trail.shift();camDirty=true;wake()}
+  }else if(p.state==='pan'){
+    const dx=x-p.x0,R=P.pan;
+    if(!p.ax){
+      // 指に 1:1。端を越えたぶんは 0.35 倍で最大 28px
+      const raw=p.tx0-dx/kA;
+      view.tx=raw<panMin?panMin-Math.min(R.max,(panMin-raw)*kA*R.rubber)/kA:raw>panMax?panMax+Math.min(R.max,(raw-panMax)*kA*R.rubber)/kA:raw;
+    }else{const s=-dx/(kA*view.zoom);view.tx=clamp(p.tx0+p.ax[0]*s,CX0,CAPX+20);view.tz=p.tz0+p.ax[1]*s;clampT()}
+    p.trail.push([t,x]);while(p.trail.length>2&&t-p.trail[0][0]>R.vel)p.trail.shift();
+    camDirty=true;wake();
+  }else if(p.state==='carry'){if(!carry.direct){carry.cx=x;carry.cy=y}wake()}
+}
+// 右ボタン・Space・Shift：回さずに、絵を画面の上でずらす（ox・oy。引いたぶんだけ 1:1。範囲は clampO）
+function slide(dx,dy){view.ox+=dx;view.oy+=dy;clampO();camDirty=true;wake()}
+// 離したら慣性：直前 vel ms の速さを引き継ぐ（指を止めてから離したら、流さない）
+function fling(tr,t,cancel){
+  orbV.on=false;orbV.y=orbV.e=0;
+  if(cancel||still||!tr||!tr.length)return;
+  if(t!=null)tr.push([t,view.yaw,view.el]);
+  while(tr.length>1&&tr.at(-1)[0]-tr[0][0]>P.view.vel)tr.shift();
+  const a=tr[0],b=tr.at(-1),dt=b[0]-a[0];if(dt<=0)return;
+  // 横は惰性で流す。縦（見下ろしの角度）は半分だけ（上下に大きく流れると、向きを見失う）。速さは上限つき
+  orbV.y=(b[1]-a[1])/dt;orbV.e=(b[2]-a[2])/dt*P.view.flingEl;orbV.tau=P.view.tau;
+  const s=Math.hypot(orbV.y,orbV.e);if(s>P.view.vmax){orbV.y*=P.view.vmax/s;orbV.e*=P.view.vmax/s}
+  orbV.on=Math.hypot(orbV.y,orbV.e)>=P.view.stop;wake();
+}
+// 2本指：距離の比 → zoom、2本を結ぶ線の回転 → yaw、まん中の上下 → el
+function startPinch(a,b){
+  startMove();orbV.on=false;panMode=null;panV=0;setHov(null);
+  const A=pts.get(a),B=pts.get(b);
+  ptr={id:a,ids:[a,b],mouse:false,state:'pinch',d0:Math.hypot(B[0]-A[0],B[1]-A[1])||1,an:Math.atan2(B[1]-A[1],B[0]-A[0]),m0:(A[1]+B[1])/2,z0:view.zoom,el0:view.el,trail:[]};
+}
+function pinchMove(t){
+  const p=ptr,A=pts.get(p.ids[0]),B=pts.get(p.ids[1]);if(!A||!B)return;
+  const an=Math.atan2(B[1]-A[1],B[0]-A[0]);view.yaw+=wrapR(an-p.an)/D;p.an=an;
+  view.zoom=zoomT=clampZ(p.z0*Math.hypot(B[0]-A[0],B[1]-A[1])/p.d0);zAnchor=null;
+  setEl(p.el0+((A[1]+B[1])/2-p.m0)*P.view.pinchEl);
+  p.trail.push([t,view.yaw,view.el]);while(p.trail.length>2&&t-p.trail[0][0]>P.view.vel)p.trail.shift();
+  camDirty=true;wake();
+}
+// 2本目の指が来たとき、1本目の押しかけを静かに取り消す
+function cancelPtr(p){
+  if(p.code&&(p.state==='press'))release(p.code,p.src,true);
+  if(p.state==='pan'){panMode=null;panV=0}
+  setHov(null);
+}
+const outPan=()=>mode==='phone'&&posed()&&(view.tx<panMin||view.tx>panMax);
+function endPtr(e,cancel){
+  if(!ptr)return;
+  if(ptr.state==='pinch'){
+    if(!ptr.ids.includes(e.pointerId))return;
+    // どちらかの指が離れたら終わり。残った指は、離れるまで何もしない
+    const other=ptr.ids.find(i=>i!==e.pointerId);fling(ptr.trail,e.timeStamp,cancel);
+    ptr=!cancel&&pts.has(other)?{id:other,mouse:false,state:'off'}:null;wake();return;
+  }
+  if(e.pointerId!==ptr.id)return;
+  const p=ptr;ptr=null;
+  if(p.mouse)mouseHeld=false;
+  if(p.right)ctxBlock=p.state==='move';   // 右ボタンで動かしたら、このあとの右クリックのメニューは出さない
+  if(p.state==='press'){
+    // 動かさずに離した：ここで「働き」を出す
+    if(!cancel)act(p.code);release(p.code,p.src,cancel);
+    if(!p.mouse)setHov(null);
+  }else if(p.state==='capPress'){if(!cancel)clickCap();if(!p.mouse)setHov(null)}
+  else if(p.state==='empty'){
+    if(!cancel){
+      if(open)close();
+      // 350ms 以内にもう一度なら、ホームに戻る（中の時計は止まっていることがあるので、本物の時計でも確かめる）
+      const w=performance.now();
+      if(now-lastEmpty<=P.view.again&&w-lastEmptyWall<=P.view.again){lastEmpty=lastEmptyWall=-1e9;goHome()}else{lastEmpty=now;lastEmptyWall=w}
+    }
+  }else if(p.state==='orbit')fling(p.trail,e.timeStamp,cancel);
+  else if(p.state==='carry')dropCap(cancel);
+  else if(p.state==='pan'){
+    // 離した時刻から見て直前 80ms の動きだけで速さを出す（指を止めてから離したら、流さない）。速さは上限つき
+    const tr=p.trail;if(e.timeStamp!=null&&e.clientX!=null)tr.push([e.timeStamp,e.clientX]);
+    while(tr.length>1&&tr.at(-1)[0]-tr[0][0]>P.pan.vel)tr.shift();
+    const a=tr[0],b=tr.at(-1),v=!cancel&&b[0]>a[0]?clamp((b[1]-a[1])/(b[0]-a[0]),-P.pan.vmax,P.pan.vmax):0;
+    panAx=p.ax;
+    if(still){if(!p.ax)view.tx=clamp(view.tx,panMin,panMax);camDirty=true}
+    else{panV=-v/(kA*(p.ax?view.zoom:1));panMode=!p.ax&&(view.tx<panMin||view.tx>panMax)?'spring':'fling'}
+  }
+  // 端のゴムが戻りきる前に触って止めたときは、ばねで範囲の中へ戻す
+  if(p.state!=='pan'&&outPan()){panAx=null;if(still){view.tx=clamp(view.tx,panMin,panMax);camDirty=true}else{panMode='spring';panV=0}}
+  if(p.mouse){
+    if(e.clientX!=null){
+      hoverAt(e.clientX,e.clientY);
+      // 押した直後は、言葉を open に替えない（カーソルが一度外れるまで、開いた中身の名前のまま）
+      if(p.state==='press'&&hov===p.code){mute=p.code;updLabel()}
+    }else canvas.style.cursor='';
+  }
+  wake();
+}
+canvas.addEventListener('lostpointercapture',e=>{endPtr(e,true);pts.delete(e.pointerId)});
+canvas.addEventListener('pointerup',e=>{endPtr(e,false);pts.delete(e.pointerId)});
+canvas.addEventListener('pointercancel',e=>{endPtr(e,true);pts.delete(e.pointerId)});
+// ホイール：寄る・離れる。カーソルの下の点（y=0 の面）が動かないように注視点も寄せる
+function wheelAt(dy,cx,cy){
+  if(!fitted||!dy)return;
+  touched=true;if(intro)finishIntro();
+  startMove();
+  // カーソルの下の点へ寄る。ただし、その点がキーボードのまわり（注視点の動ける範囲 +40mm）から外れているときは、注視点へ寄る
+  // （低い角度で白い所にカーソルがあると、当たる点が何百 mm も先になって、視点が横へ飛ぶ）
+  const z1=clampZ(zoomT*Math.exp(-dy*P.view.wheel));
+  if(z1!==zoomT){const q=rayAt(cx,cy,0),m=P.view.margin+40;zAnchor=q&&q.x>CX0-m&&q.x<CAPX+m&&q.z>CZ0-m&&q.z<-CZ0+m?{x:q.x,z:q.z}:null}
+  zoomT=z1;wake();
+}
+canvas.addEventListener('wheel',e=>{e.preventDefault();wheelAt(e.deltaY*(e.deltaMode===1?16:e.deltaMode===2?H:1),e.clientX,e.clientY)},{passive:false});
+// 右クリックのメニュー：右ボタンで動かしたあと、または押している最中に来たとき（Mac など）は出さない。動かさずに離したら出す
+// （window で受ける：右ドラッグを名前や中身の文字の上で離すと、contextmenu は canvas ではなくその要素に来る）
+addEventListener('contextmenu',e=>{if((lastTouch&&e.target===canvas)||ctxBlock||(ptr&&ptr.right))e.preventDefault();ctxBlock=false});
+// 見えないボタン：押すとキーを押したのと同じ。フォーカスはカーソルを乗せたのと同じ
+sr.addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;
+  if(e.detail===0&&enterRepeat)return;   // Enter を押しっぱなしにしたときの繰り返しは無視（開いたり閉じたりを繰り返さない）
+  touched=true;if(intro)finishIntro();const c=b.dataset.code;mute=c;press(c,'sr',true);at(P.time.sr,()=>release(c,'sr'));
+});
+sr.addEventListener('focusin',e=>{const b=e.target.closest('button');if(b)setHov(b.dataset.code,'focus')});
+sr.addEventListener('focusout',()=>{if(hovSrc==='focus')setHov(null)});
+
+/* ---------- 文字の層（ラベルと中身の位置） ---------- */
+// 紙：名前の下端 + top にラベル（開いている中身の名前。カーソルを乗せたときは、同じ場所にその言葉を薄く）
+function updLabel(){
+  let code=null,word=null,hv=false;
+  if(hov&&hovReady&&hov!==mute){word=wordOf(hov);if(word){code=hov;hv=true}}
+  if(!word&&open){word=open;code=KEY_OF[open]}
+  if(!word||!fitted){label.style.visibility='hidden';return}
+  label.style.color=inkOf(code);label.style.opacity=hv?P.paper.hover:'';label.textContent=word;
+  label.style.left=pad+'px';label.style.top=(nameB()+P.paper.top)+'px';label.style.visibility='visible';
+}
+// 中身：ラベルの下に gap あけて。高さの上限は pc：画面の下の pad まで。phone：ホームの向きでのキーボードの上端から、よける余白ぶん上まで（超えたら中で動かす）
+function placePanel(){
+  if(panel.hidden||!fitted)return;
+  const s=panel.style,top=nameB()+P.paper.top+P.labelH+P.paper.gap;
+  s.top=top+'px';s.left=pad+'px';s.right=mode==='phone'?pad+'px':'';s.maxWidth=(W-2*pad)+'px';
+  s.maxHeight=Math.max(0,(mode==='phone'?homeTop-dodgeM():H-pad)-top)+'px';
+  dodgeNeed=true;   // 中身が変わった：よけるかを調べ直す
+}
+function refit(){applyLook();buildCase();buildKeys();drawLegends();drawAO();drawFloor();fit();placePanel();updLabel();apply();wake()}
+new ResizeObserver(()=>{fit();placePanel();updLabel();wake()}).observe(app);
+
+/* ---------- 確認用 T ---------- */
+function state(){
+  const lr=label.getBoundingClientRect(),pr=panel.getBoundingClientRect(),lv=label.style.visibility==='visible';
+  return{mode,open,armed,cap,intro,busy:busy(),pan:+view.tx.toFixed(2),view:tView(),homing,dodging,name:nameEl.textContent,
+    label:{text:lv?label.textContent:'',visible:lv,left:lr.left,bottom:lr.bottom},
+    panel:{visible:!panel.hidden,left:pr.left,bottom:pr.bottom,width:pr.width,height:pr.height,rows:panel.querySelectorAll('[data-row]').length}};
+}
+function layout(){
+  const keys={};
+  for(const k of LIST){
+    const h=prof(k.row)[0],g=P.gap/2+P.ring.at(-1)[2];let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
+    for(const q of k.rects)for(const [a,b] of [[q[0],q[1]],[q[2],q[1]],[q[0],q[3]],[q[2],q[3]]]){
+      const [x,y]=px(cam0,wx(a)+(a===q[0]?g:-g),h,wz(b)+(b===q[1]?g:-g));x0=Math.min(x0,x);x1=Math.max(x1,x);y0=Math.min(y0,y);y1=Math.max(y1,y)}
+    keys[k.code]=[x0,y0,x1,y1];
+  }
+  return{W,H,mode,uPx:uAt(),caseBox:box2(cam0,CASE),topY:kbox()[1],keys};
+}
+function step(ms=16){let b=true;for(let t=0;t<ms-1e-9;t+=4)b=advance(Math.min(4,ms-t));render();return b}
+const tView=()=>Object.fromEntries(Object.entries(view).map(([k,v])=>[k,+v.toFixed(3)]));
+// 何もない所から dx, dy ピクセル引いて離したのと同じ（ms かけて引く。離す直前の速さで慣性がつく）
+function tOrbit(dx,dy,ms=120){
+  if(ptr)endPtr({pointerId:ptr.id},true);
+  const t0=performance.now(),n=8;
+  ptr={id:-7,mouse:true,x0:0,y0:0,lx:0,ly:0,code:null,src:'ptr',up:false,state:'empty',trail:[]};mouseHeld=true;
+  for(let i=1;i<=n;i++)dragMove(dx*i/n,dy*i/n,t0+ms*i/n,false);
+  endPtr({pointerId:-7,timeStamp:t0+ms},false);
+}
+// 何もない所から右ボタンで dx, dy ピクセル引いて離したのと同じ（絵が画面の上でずれる。慣性なし）
+function tPan(dx,dy,ms=120){
+  if(ptr)endPtr({pointerId:ptr.id},true);
+  const t0=performance.now(),n=8;
+  ptr={id:-8,mouse:true,x0:0,y0:0,lx:0,ly:0,code:null,src:'ptr',up:false,state:'look',right:true,trail:[]};mouseHeld=true;
+  for(let i=1;i<=n;i++)dragMove(dx*i/n,dy*i/n,t0+ms*i/n,false);
+  endPtr({pointerId:-8,timeStamp:t0+ms},false);ctxBlock=false;
+}
+function tCap(){
+  V.set(0,capTop/2,0).applyQuaternion(capG.quaternion).add(capG.position);
+  const up=new V3(0,1,0).applyQuaternion(capG.quaternion).y>0;
+  const yaw=cap==='off'?capF.yaw:cap==='carry'?carry.yaw:new THREE.Euler().setFromQuaternion(capG.quaternion,'YXZ').y;
+  return{state:cap,x:+V.x.toFixed(2),y:+V.y.toFixed(2),z:+V.z.toFixed(2),yaw:+(wrapR(yaw)/D).toFixed(1),face:up?'up':'down'};
+}
+function reset(){
+  finishIntro();close();setHov(null);releaseAll();
+  for(const k of LIST)k.tapped=k.wd=k.dead=false;
+  EV.length=0;TW.length=0;homeTw=null;homing=dodging=false;panMode=null;panV=0;panAx=null;hovEv=null;lastEmpty=lastEmptyWall=-1e9;ctxBlock=false;
+  if(cap==='carry'){const B=P.carry.box;capF=placeCap(clamp(carry.c[0],CX0+B[0],-CX0+B[1]),clamp(carry.c[2],CZ0+B[2],-CZ0+B[3]),carry.yaw,false);setCap('off')}
+  if(cap==='flying')setCap(capKind==='seat'||capKind==='on'?'on':'off');
+  sway.x=sway.y=sway.tx=sway.ty=0;setViewNow(homeView());
+  step(500);
+}
+function selfTest(){
+  const pass=[],fail=[],skip=[],ok=(n,c,info)=>c?pass.push(n):fail.push(n+(info!==undefined?' — '+info:''));
+  const near=(a,b,e=.05)=>Math.abs(a-b)<=e;
+  const keep={open:window.open,links:DATA.links,cap:cap==='on'?'on':'off',capF:{...capF},still,view:{...view}},calls=[],caps=[],onCap=e=>caps.push(e.detail);
+  // 見に来た人の保存（キャップの置き場所）は、確かめている間は書きかえない。終わったら元に戻す
+  let capKept=null;try{capKept=localStorage.getItem(CAP_KEY)}catch{}
+  capSave=false;
+  window.open=(...a)=>{calls.push(a);return null};addEventListener('taq:cap',onCap);
+  const rowsShown=()=>[...panel.querySelectorAll('.r')].every(e=>getComputedStyle(e).visibility==='visible');
+  try{
+    reset();setCap('off');
+    // 1 配列
+    const codes=LIST.map(k=>k.code);
+    ok('1 キーは 91 個',LIST.length===91,LIST.length);
+    ok('1 code は重複なし',new Set(codes).size===codes.length);
+    const sums=ROWS.map((r,i)=>{let x=0;for(const e of r.keys){if(x>=15-1e-9)break;x+=typeof e==='number'?e:(e[2]||1)}return x+(i===3?1.25:0)});
+    ok('1 各段の左 15u が 15',sums.every(s=>near(s,15,1e-9)),sums.map(s=>+s.toFixed(3)).join(','));
+    const ext=[Math.max(...LIST.flatMap(k=>k.rects.map(q=>q[2]))),Math.max(...LIST.flatMap(k=>k.rects.map(q=>q[3])))];
+    ok('1 全体が 18.35u × 6.3u',near(ext[0],18.35,1e-9)&&near(ext[1],6.3,1e-9),ext.join('×'));
+    // 2 沈んで戻る
+    DATA.links=demo({links:{}}).links;
+    const bad=[];
+    for(const k of LIST){
+      T.down(k.code);step(110);if(!near(k.y,-3.3))bad.push(k.code+' '+k.y.toFixed(2));   // （軽く叩いた扱いのキーは 120ms で離れ始めるので、その前に見る）
+      T.up(k.code);step(300);if(!near(k.y,targetOf(k)))bad.push(k.code+'↑'+k.y.toFixed(2));
+    }
+    ok('2 91 個が沈んで戻る',!bad.length,bad.slice(0,8).join(' '));
+    reset();
+    // 3 中身
+    T.tap('KeyF');ok('3 F で favorites',open==='favorites',open);
+    step(400);
+    const lis=[...panel.querySelectorAll('.fav ul')].map(u=>u.querySelectorAll('li').length);
+    ok('3 F は −1.5 で止まる',near(KEYS.KeyF.y,-1.5),KEYS.KeyF.y.toFixed(3));
+    { const want=DATA.music.length+'+'+DATA.films.length; ok('3 行が content.txt の件数どおり',lis.join('+')===want,lis.join('+')+' / '+want); }
+    ok('3 step(400) で全部見える',rowsShown());
+    T.tap('KeyF');ok('3 もう一度で閉じる',open===null&&panel.hidden);
+    T.tap('KeyA');step(100);T.tap('KeyL');ok('3 A→L で切り替わる',open==='lately',open);
+    T.tap('Escape');ok('3 Escape で閉じる',open===null);
+    reset();
+    // 4 SNS の2段階
+    calls.length=0;
+    T.tap('KeyX');ok('4 X で armed、開かない',open==='x'&&armed&&!calls.length);
+    step(100);T.tap('KeyX');ok('4 250ms 以内の2回目は無視',open==='x'&&!calls.length);
+    step(300);T.tap('KeyX');ok('4 2回目で1回開く',calls.length===1&&calls[0][0]==='https://example.com/',JSON.stringify(calls));
+    step(700);ok('4 700ms 後に閉じている',open===null,open);
+    calls.length=0;T.tap('KeyG');T.tap('Enter');ok('4 G→Enter でも1回',calls.length===1,calls.length);
+    step(700);
+    DATA.links={x:{id:'',url:''},instagram:{id:'',url:''},github:{id:'',url:''}};
+    T.tap('KeyX');ok('4 ID が空なら armed=false',open==='x'&&!armed);
+    T.tap('KeyX');ok('4 ID が空の2回目は閉じるだけ',open===null&&calls.length===1);
+    DATA.links=demo({links:{}}).links;
+    reset();
+    // 5 ラベル
+    T.hover('KeyF');step(150);let s=state();
+    ok('5 hover でラベル favorites',s.label.visible&&s.label.text==='favorites',JSON.stringify(s.label));
+    ok('5 hover で −0.4',near(KEYS.KeyF.y,-.4),KEYS.KeyF.y.toFixed(3));
+    T.hover(null);ok('5 hover(null) で消える',!state().label.visible);
+    T.tap('KeyA');step(100);T.hover('Escape');step(150);s=state();
+    ok('5 開いている間に esc に乗せても、見出しは about のまま（close は出さない）',s.label.text==='about'&&label.style.opacity==='',s.label.text);
+    T.hover(null);T.tap('Escape');
+    reset();
+    // 6 キャップ
+    caps.length=0;
+    ok('6 最初は off',cap==='off');
+    T.tap('ArrowUp');step(300);ok('6 ↑ では変わらない',cap==='off'&&!caps.length);
+    T.clickCap();step(700);ok('6 床のキャップで on',cap==='on'&&caps.length===1&&caps[0].on===true,JSON.stringify(caps));
+    T.tap('ArrowUp');step(700);ok('6 ↑ で外れて off',cap==='off'&&caps.length===2&&caps[1].on===false,JSON.stringify(caps));
+    reset();
+    // 7 開いたときの動き
+    still=false;startIntro();let t=0,introSunk=false;while(intro&&t<1000){step(50);t+=50;if(LIST.some(k=>k.y<-.01))introSunk=true}
+    ok('7 開いたときに、キーボードのキーは沈まない（名前だけが打たれる）',!introSunk);
+    ok('7 1000ms 以内に終わる',!intro&&nameEl.textContent===DATA.name&&open===null,t+'ms '+nameEl.textContent);
+    still=true;startIntro();ok('7 動きを減らす設定では最初から終わっている',!intro&&nameEl.textContent===DATA.name);
+    still=keep.still;
+    reset();
+    // 8 止まる
+    step(1500);ok('8 何もしなければ busy=false',!state().busy);
+    // 9 文字が重ならない
+    T.tap('KeyF');step(400);
+    const lay=layout(),pr=panel.getBoundingClientRect(),nr=nameEl.getBoundingClientRect();s=state();
+    ok('9 ラベルの下端 ≤ topY−16',s.label.visible&&s.label.bottom<=lay.topY-16,s.label.bottom.toFixed(1)+' / '+lay.topY.toFixed(1));
+    // 中身は、名前の横に並ばないなら上の余白（pad）まで使ってよい
+    ok('9 中身が画面の中',pr.left>=pad-.5&&pr.right<=W-pad+.5&&pr.top>=pad-.5&&pr.bottom<=H,[pr.left,pr.right,pr.top,pr.bottom].map(v=>v.toFixed(0)).join(','));
+    ok('9 名前と中身が重ならない',pr.top>=nr.bottom||pr.left>=nr.right);
+    T.tap('Escape');reset();
+    // 10 スマホ
+    if(mode==='phone'){
+      view.tx=panHome;place();
+      const L=layout(),want=clamp(W/P.phone.u[0],P.phone.u[1],P.phone.u[2]);
+      ok('10 uPx',near(L.uPx,want,1),L.uPx.toFixed(2)+' / '+want.toFixed(2));
+      const out=['KeyA','KeyF','KeyG','KeyL','KeyX','KeyI'].filter(c=>L.keys[c][0]<0||L.keys[c][2]>W);
+      // 幅が 9.4u × 38px に足りない画面（320px など）は、6個が一度には入らない（横に動かして見る）
+      if(W>=P.phone.u[0]*P.phone.u[1])ok('10 色のキーが画面の内側',!out.length,out.join(' '));else skip.push('10 色のキーが画面の内側（幅が足りない画面）');
+      const yT=H-P.phone.bottom-safeB();ok('10 ケースのいちばん下',near(L.caseBox[3],yT,3),L.caseBox[3].toFixed(1)+' / '+yT.toFixed(1));
+    }else skip.push('10（pc なので省略）');
+    reset();
+    // 11 回す
+    let v0=T.view;T.orbit(100,0);let v1=T.view;
+    ok('11 orbit(100,0) で yaw が約 −28°',near(v1.yaw-v0.yaw,-28,.5),(v1.yaw-v0.yaw).toFixed(2));
+    ok('11 ホームでなくなる',!atHome());
+    step(1500);ok('11 step(1500) で止まる',!busy());
+    T.home();step(700);ok('11 home() でホーム',atHome(),JSON.stringify(T.view));
+    reset();
+    // 12 回した向きで開く：ホームに戻さない
+    T.setView({yaw:40,el:40});step(50);
+    T.tap('KeyF');step(900);
+    ok('12 回した向きで F → favorites、yaw・el はそのまま',open==='favorites'&&near(view.yaw,40,.01)&&near(view.el,40,.01),JSON.stringify(T.view)+' '+open);
+    ok('12 行が全部見える',rowsShown());
+    T.tap('Escape');reset();
+    // 13 寄せる
+    T.wheel(-300);step(400);ok('13 wheel(−300) で zoom > 1',view.zoom>1,view.zoom.toFixed(3));
+    for(let i=0;i<6;i++){T.wheel(-2000);step(100)}step(800);const zHi=view.zoom;
+    for(let i=0;i<8;i++){T.wheel(3000);step(100)}step(800);const zLo=view.zoom,zr=zRange();
+    ok('13 大きく回しても範囲を出ない',zHi<=zr[1]+1e-9&&zLo>=zr[0]-1e-9&&near(zHi,zr[1],.01)&&near(zLo,zr[0],.01),zHi.toFixed(3)+' / '+zLo.toFixed(3));
+    reset();
+    // 14 キーで回す
+    v0=T.view;T.down('ArrowLeft');step(100);T.up('ArrowLeft');step(600);v1=T.view;
+    ok('14 ← を軽く叩いただけでは回らない',Math.abs(v1.yaw-v0.yaw)<1&&atHome(),(v1.yaw-v0.yaw).toFixed(2));
+    v0=T.view;T.down('ArrowLeft');step(700);T.up('ArrowLeft');step(1500);v1=T.view;
+    ok('14 ← を 700ms 押すと yaw が 30〜60° 増える',v1.yaw-v0.yaw>=30&&v1.yaw-v0.yaw<=60,(v1.yaw-v0.yaw).toFixed(2));
+    ok('14 離したら止まる',!busy());
+    T.tap('Home');step(700);ok('14 Home でホーム',atHome(),JSON.stringify(T.view));
+    T.tap('End');step(700);ok('14 End で el −58',near(view.el,P.view.under,1),view.el.toFixed(2));
+    reset();
+    // 15 キャップをつかむ
+    setCap('off');caps.length=0;
+    T.capGrab();ok('15 つかむと carry',cap==='carry',cap);
+    T.capMove(-CX0+60,0);step(400);T.capDrop();step(800);
+    const cp=T.cap;ok('15 机に置くと off',cp.state==='off'&&near(cp.y,FLOOR+capTop/2,.05),JSON.stringify(cp));
+    T.capGrab();T.capMove(wx(UP.cu),wz(UP.cv));step(400);T.capDrop();step(300);
+    ok('15 軸に運ぶと on、taq:cap が {on:true} で1回',cap==='on'&&caps.length===1&&caps[0].on===true,cap+' '+JSON.stringify(caps));
+    reset();
+    // 16 裏から
+    T.setView({el:-40});step(50);
+    ok('16 下から見ると床の影が 0',shades.every(m=>m.material.opacity===0)&&blob.material.opacity===0);
+    reset();
+    // 17 止まる
+    step(1500);ok('17 ホームで何もしなければ busy=false',!state().busy&&atHome());
+    reset();
+    // 18 キャップをキーの上に置く（F のあたり）。キーと一緒に沈む
+    setCap('off');const F=KEYS.KeyF,fTop=()=>P.capY+prof(F.row)[0]+F.y+capTop/2;
+    T.capGrab();T.capMove(wx(5.25),wz(3.8));step(400);T.capDrop();step(800);
+    let c0=T.cap;
+    ok('18 キーの上に置ける（off、キーの上面 + 中心の高さ）',c0.state==='off'&&c0.y>FLOOR+capTop/2+1&&near(c0.y,fTop(),.05),JSON.stringify(c0)+' / '+fTop().toFixed(2));
+    press('KeyF','kb',false);step(120);let c1=T.cap;
+    ok('18 F を押すとキャップも 3.3 沈む',near(c0.y-c1.y,3.3,.05),(c0.y-c1.y).toFixed(3));
+    release('KeyF','kb');step(400);c1=T.cap;ok('18 離すと戻る',near(c1.y,c0.y,.05),c1.y);
+    step(1500);ok('18 step(1500) で busy=false',!busy());
+    // 19 キーボードの奥に置ける
+    T.capGrab();T.capMove(0,CZ0-60);step(400);T.capDrop();step(800);c0=T.cap;
+    ok('19 キーボードの奥に置ける',c0.state==='off'&&near(c0.x,0,.5)&&near(c0.z,CZ0-60,.5)&&near(c0.y,FLOOR+capTop/2,.05),JSON.stringify(c0));
+    reset();
+    // 20 右ボタンで、画面の上でずらす（ox・oy に 1:1）
+    const dx0=120;
+    v0=T.view;let k0=kbox();T.pan(dx0,0);v1=T.view;let k1=kbox();
+    ok('20 pan('+dx0+',0) で絵が右へ '+dx0+'px、向きと注視点は同じ',near(v1.ox-v0.ox,dx0,.01)&&v1.oy===v0.oy&&v1.yaw===v0.yaw&&v1.el===v0.el&&v1.tx===v0.tx&&v1.tz===v0.tz&&near(k1[0]-k0[0],dx0,.5)&&near(k1[1]-k0[1],0,.5),JSON.stringify(v1)+' K '+(k1[0]-k0[0]).toFixed(1));
+    k0=k1;T.pan(0,50);k1=kbox();ok('20 pan(0,50) で絵が下へ 50px',near(k1[1]-k0[1],50,.5)&&near(k1[0]-k0[0],0,.5),(k1[1]-k0[1]).toFixed(1));
+    const keepM=Math.min(P.view.keep,W/2,H/2),inS=()=>{const k=kbox();return k[2]>=keepM-.5&&k[0]<=W-keepM+.5&&k[3]>=keepM-.5&&k[1]<=H-keepM+.5};
+    let okR=inS();for(const [dx,dy] of [[5000,0],[-5000,0],[0,5000],[0,-5000],[3000,3000]]){T.pan(dx,dy);okR=okR&&inS()}
+    ok('20 どれだけずらしても、キーボードが画面の中に keep px は残る',okR,JSON.stringify(T.view)+' K '+kbox().map(v=>v.toFixed(0)).join(','));
+    T.home();step(700);ok('20 home() で ox・oy が 0',atHome()&&view.ox===0&&view.oy===0,JSON.stringify(T.view));
+    reset();
+    // 21 印字
+    ok('21 印字の板が 90',LIST.filter(k=>k.leg).length===90,LIST.filter(k=>k.leg).length);
+    ok('21 半角/全角の印字が h/z',!!KEYS.Backquote.leg&&KEYS.Backquote.label==='h/z',KEYS.Backquote.label);
+    T.tap('Backquote');step(400);ok('21 Backquote は沈んで戻るだけ',near(KEYS.Backquote.y,0)&&nameEl.textContent===DATA.name,KEYS.Backquote.y.toFixed(3)+' '+nameEl.textContent);
+    reset();
+    // 22 視点を動かしても、中身は開いたまま
+    const shown=()=>{const s=state();return open==='favorites'&&!panel.hidden&&rowsShown()&&s.label.visible&&s.label.text==='favorites'};
+    T.tap('KeyF');step(600);
+    T.orbit(60,0);step(700);ok('22 orbit(60,0) でも開いたまま',shown(),open);
+    T.wheel(-200);step(700);ok('22 wheel(−200) でも開いたまま',shown(),open);
+    T.pan(40,0);step(700);ok('22 pan(40,0) でも開いたまま',shown(),open);
+    T.down('ArrowLeft');step(700);T.up('ArrowLeft');step(700);ok('22 ← を 700ms 押しても開いたまま',shown(),open);
+    T.tap('Escape');reset();
+    // 23 打たない：ラベルはすぐ全部、ほかのキーは沈まない
+    T.tap('KeyF');s=state();ok('23 開いた直後にラベルが favorites',s.label.visible&&s.label.text==='favorites',s.label.text);
+    const sunk=new Set();for(let i=0;i<10;i++){step(30);for(const k of LIST)if(k.code!=='KeyF'&&k.y<-.01)sunk.add(k.code)}
+    ok('23 F 以外のキーは沈まない',!sunk.size,[...sunk].join(' '));
+    T.tap('Escape');reset();
+    // 24 よける：K と「R を、よける余白 − 1px 広げた四角」が重ならない
+    const clear=()=>{const K=kbox(),R=rbox(),m=dodgeM()-1;return!!R&&!(K[0]<R[2]+m&&K[2]>R[0]-m&&K[1]<R[3]+m&&K[3]>R[1]-m)};
+    const kr=()=>'K '+kbox().map(v=>v.toFixed(0)).join(',')+' R '+(rbox()||[]).map(v=>v.toFixed(0)).join(',')+' '+JSON.stringify(T.view);
+    T.tap('KeyF');step(600);ok('24 ホームで F：重ならない',clear(),kr());
+    T.setView({oy:-200});step(900);let K=kbox();
+    ok('24 キーボードを上へ（oy −200）：よけて重ならない、画面の中',clear()&&K[1]>=-.5&&K[3]<=H+.5&&(mode==='phone'||K[0]>=-.5&&K[2]<=W+.5),kr());
+    T.setView({zoom:2.4});step(1200);K=kbox();
+    ok('24 zoom 2.4：重ならず、下端が H 以内か zoom が下がっている',clear()&&(K[3]<=H+.5||view.zoom<2.4-1e-6),kr());
+    const vc=T.view;T.tap('Escape');step(900);const vd=T.view;
+    ok('24 閉じても ox・oy・zoom は戻らない',vd.ox===vc.ox&&vd.oy===vc.oy&&vd.zoom===vc.zoom,JSON.stringify(vc)+' → '+JSON.stringify(vd));
+    reset();
+    // 25 止まる（開いたままでも）
+    T.tap('KeyF');step(1500);ok('25 開いたまま何もしなければ busy=false',!busy());
+    T.tap('Escape');reset();
+    // 26 色のキー（配色は1つに決まった。切り替えはない）
+    const hexOf=h=>new THREE.Color(h).getHexString(),hx=m=>m.color.getHexString();
+    ok('26 色のキーは P.keys の色、6個とも別の色',[...TINT].every(c=>hx(M[c])===hexOf(P.keys[c][0]))&&new Set([...TINT].map(c=>hx(M[c]))).size===6,[...TINT].map(c=>hx(M[c])).join(' '));
+    ok('26 印字はインク色',[...TINT].every(c=>KEYS[c].ink===P.keys[c][1]),KEYS.KeyA.ink);
+    ok('26 右上の配色の印はない',!document.getElementById('pals'));
+    const before=[...TINT].map(c=>hx(M[c])).join();T.tap('Digit3');ok('26 数字キーで色は変わらない',[...TINT].map(c=>hx(M[c])).join()===before);
+    T.tap('KeyF');ok('26 esc の印字は開いた中身のキーのインク色',KEYS.Escape.ink===P.keys.KeyF[1]&&label.style.color!=='',KEYS.Escape.ink);
+    T.tap('Escape');reset();
+    // 27 開いている間は、ほかの中身のキーに乗せても、見出しを替えない（開いている中身に効く close は出す）
+    T.tap('KeyF');step(400);
+    T.hover('KeyA');step(150);s=state();ok('27 favorites を開いたまま A に乗せても、見出しは favorites（濃いまま）',s.label.text==='favorites'&&label.style.opacity==='',s.label.text+' '+label.style.opacity);
+    T.hover('KeyX');step(150);s=state();ok('27 X に乗せても favorites',s.label.text==='favorites',s.label.text);
+    T.hover('Escape');step(150);s=state();ok('27 esc に乗せても favorites（close は出さない）',s.label.text==='favorites',s.label.text);
+    T.hover('KeyF');step(150);s=state();ok('27 開いている F に乗せても favorites',s.label.text==='favorites',s.label.text);
+    // 指で開いているキーを押したとき（押している間に close が出ない）
+    T.hover(null);setHov('KeyF','touch',true);s=state();ok('27 指で F を押している間も favorites',s.label.text==='favorites'&&label.style.opacity==='',s.label.text);
+    setHov(null);
+    T.hover(null);T.tap('Escape');T.hover('KeyA');step(150);s=state();ok('27 閉じたあとは、A に乗せると about',s.label.text==='about',s.label.text);
+    T.hover(null);reset();
+    // 28 ↑ のキャップの置き場所を覚える
+    const saved=()=>{try{return JSON.parse(localStorage.getItem(CAP_KEY))}catch{return null}};
+    capSave=true;setCap('off');
+    T.capGrab();T.capMove(-CX0+40,12);step(400);T.capDrop();step(800);let sv=saved();
+    ok('28 机に置いたら、場所・向き・表裏を覚える',!!sv&&sv.on===false&&near(sv.x,capF.x,.01)&&near(sv.z,capF.z,.01)&&near(sv.yaw,capF.yaw,1e-3)&&sv.down===capF.down,JSON.stringify(sv));
+    const cf={...capF};capF={x:CAPX,z:CAPZ,yaw:0,down:true,y:FLOOR,ride:[]};setCap('off');loadCap();
+    ok('28 読み直すと、同じ所に同じ向きで置いてある',cap==='off'&&near(capF.x,cf.x,.01)&&near(capF.z,cf.z,.01)&&near(capF.yaw,cf.yaw,1e-3)&&capF.down===cf.down,JSON.stringify(capF));
+    T.capGrab();T.capMove(wx(5.25),wz(3.8));step(400);T.capDrop();step(800);sv=saved();capF={x:CAPX,z:CAPZ,yaw:0,down:true,y:FLOOR,ride:[]};setCap('off');loadCap();
+    ok('28 キーの上に置いても、読み直すとキーの上（F に乗る）',cap==='off'&&capF.ride.includes('KeyF'),JSON.stringify(capF.ride));
+    T.capGrab();T.capMove(wx(UP.cu),wz(UP.cv));step(400);T.capDrop();step(400);sv=saved();
+    ok('28 はめたら、はまったまま覚える',cap==='on'&&!!sv&&sv.on===true,JSON.stringify(sv));
+    setCap('off');loadCap();ok('28 読み直すと、はまっている',cap==='on',cap);
+    try{localStorage.setItem(CAP_KEY,'{"v":1,"on":false,"x":"zzz"}')}catch{}setCap('off');capF={x:CAPX,z:CAPZ,yaw:0,down:true,y:FLOOR,ride:[]};loadCap();
+    ok('28 壊れた保存は無視して、いつもの場所のまま',cap==='off'&&capF.x===CAPX,JSON.stringify(capF));
+    try{localStorage.setItem(CAP_KEY,'{"v":1,"on":false,"x":99999,"z":-99999,"yaw":0,"down":false}')}catch{}loadCap();
+    const B=P.carry.box;ok('28 範囲の外の保存は、範囲の中へ',near(capF.x,-CX0+B[1],.01)&&near(capF.z,CZ0+B[2],.01),JSON.stringify(capF));
+    capSave=false;reset();
+  }catch(err){fail.push('例外: '+(err&&err.stack||err))}
+  finally{
+    window.open=keep.open;removeEventListener('taq:cap',onCap);DATA.links=keep.links;still=keep.still;
+    reset();capF=keep.capF;setCap(keep.cap);setViewNow(keep.view);render();
+    try{if(capKept==null)localStorage.removeItem(CAP_KEY);else localStorage.setItem(CAP_KEY,capKept)}catch{}
+    capSave=true;
+  }
+  return skip.length?{pass,fail,skip}:{pass,fail};
+}
+window.T={
+  step,render,refit,state,layout,selfTest,clickCap,
+  down:c=>kbDown(c,'',false,false,false),up:c=>kbUp(c),tap(c){this.down(c);this.up(c)},
+  hover:c=>setHov(c,'mouse'),
+  // 視点：今の {tx,tz,yaw,el,zoom,ox,oy}、すぐその向きにする、ホームへ戻る、ホームにいるか
+  get view(){return tView()},setView(o){setViewNow({...view,...o});render()},home:()=>goHome(),atHome,
+  // 何もない所から引いて離す（ms で慣性の速さが決まる）、右ボタンで引く（画面の上でずらす）、ホイール（x, y は canvas の中の位置）
+  orbit:tOrbit,pan:tPan,wheel:(dy,x=W/2,y=H/2)=>{const r=canvas.getBoundingClientRect();wheelAt(dy,r.left+x,r.top+y)},
+  // よける：K（キーボードの映った範囲）、R（開いている中身の四角。閉じていれば null）。どちらも [x0, y0, x1, y1]
+  kbox:()=>kbox(),rbox,
+  // ↑ のキャップ：状態と中心の位置、つかむ、机の座標 (x, z) mm へ運ぶ（時間は T.step で進める）、離す
+  get cap(){return tCap()},capGrab(){return grabCap(null,null)||pullCap(null,null)},capMove(x,z){if(cap==='carry'){carry.direct=[x,z];wake()}},capDrop:()=>dropCap(false),
+  // 確認用：場面の中身と、細部の拡大（k 倍。x, y はふつうの画面での位置。k=1 で元に戻る）
+  three:{scene,cam,cam0,renderer,sun,hemi,M,board},
+  zoom(k=1,x=W/2,y=H/2){cam.setViewOffset(W*k,H*k,k===1?-view.ox:(x-view.ox)*k-W/2,k===1?offY-view.oy:(y+offY-view.oy)*k-H/2,W,H);renderer.render(scene,cam)},
+  // 色のキーの配色の見比べ（仮）：今の番号、切り替える
+
+  get keys(){const o={};for(const k of LIST)o[k.code]={y:+k.y.toFixed(3),target:targetOf(k),held:k.src.size>0,latch:k.latch};return o}
+};
+
+/* ---------- 起動 ---------- */
+// 印字の絵は、書体が読めてから描く（読めなくても 1.5 秒で先へ）
+const introOn=qs.get('intro')!=='0';
+if(!introOn)nameEl.textContent='taq';
+const legLoad=legendCss.then(()=>document.fonts.load(`${P.font.weight} ${P.font.one}px "${P.font.family}"`,LEG_TEXT)).catch(()=>{});
+const fonts=Promise.race([
+  Promise.all([legLoad,document.fonts.load('400 13px "M PLUS 1 Code"'),document.fonts.load('500 14px "M PLUS 1 Code"')]),
+  new Promise(r=>setTimeout(r,1500))]).catch(()=>{});
+const content=fetch('content.txt',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error(r.status);return r.text()}).then(parse)
+  .catch(e=>{console.warn('content.txt を読めなかった。名前だけで動かす',e);return empty()});
+// 中身が遅いときも 1.5 秒で先へ進む（キーボードと名前を先に出す）。届いたら入れ替える
+const firstContent=Promise.race([content,new Promise(r=>setTimeout(()=>r(null),1500))]);
+// 中身を入れる。もう何か開いていたら（読み込みが終わる前にキーを押した、あとから中身が届いた）、新しい中身で作り直す
+const useData=d=>{DATA=qs.get('demo')==='1'?demo(d):d;nameEl.setAttribute('aria-label',DATA.name);if(open){const o=open;close();openC(o)}};
+applyLook();buildCase();buildKeys();loadCap();drawAO();drawFloor();fit();   // loadCap：前に来たときのキャップの置き場所（キャップの形ができてから）
+Promise.all([fonts,firstContent]).then(([,d])=>{
+  useData(d||empty());
+  drawLegends();apply();ready=true;fit();render();
+  if(introOn&&!still&&!touched)startIntro();else finishIntro();
+  wake();
+  if(!d)content.then(late=>{useData(late);if(!intro)nameEl.textContent=DATA.name;wake()});
+  // 印字の書体が 1.5 秒に間に合わなかったときのために、読めたらもう一度描く（間に合っていれば、同じ絵を描き直すだけ）
+  legLoad.then(()=>{drawLegends();wake()});
+  document.fonts.ready.then(()=>{placePanel();updLabel();wake()});
+});
+</script>
+</body>
+</html>
