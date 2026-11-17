@@ -28,7 +28,10 @@ mid90s
 # favorites の下に小さく出る一言。要らなければ消す
 # taq の文（2026-11-17）。前の「おすすめあったら教えてください」は、文が腹立つのと、映画だけに向けた言葉に見えたので替えた
 どちらもおすすめ教えてください
-_ _
+
+[form]
+# 一行の横に出る入力欄の送り先（Google フォーム）。formResponse の URL | entry.数字。空なら欄は出ない
+https://docs.google.com/forms/d/e/1FAIpQLScXh9SUkyed2G8_qy8CEzqzOc2b_iI4hJqxpc2Yhzq1CO7jxw/formResponse | entry.600986335
 
 [lately]
 # 日付 | ひとこと。まだ何もなければ空でいい
