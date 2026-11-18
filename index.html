@@ -47,6 +47,12 @@ body{color:var(--fg);font-family:"M PLUS 1 Code",monospace;font-synthesis:none;-
 .ask:focus{border-bottom-color:var(--fg)}
 .ask:disabled{opacity:.5}
 .sent{margin-left:1.2ch;color:var(--sub)}
+/* 下線の右端の内側に、小さく「enter」。打つと少し濃くなる（13、taq 2026-11-18：カーソルなし・enter は小さく・下線の中） */
+.askw{position:relative;display:inline-block;margin-left:1.2ch;vertical-align:baseline;white-space:nowrap}
+.askw .ask{margin:0;padding-right:3.6em;width:calc(16ch + 3.6em);max-width:none}
+.askhint{position:absolute;right:1px;bottom:5px;font-size:10px;line-height:1;color:#bdb9cb;pointer-events:none;transition:color .15s}
+.askw.typed .askhint{color:var(--sub)}
+@media (prefers-reduced-motion:reduce){.askhint{transition:none}}
 .hp{position:absolute;left:-9999px;width:1px;height:1px;opacity:0}
 .fav{display:flex;gap:48px;align-items:flex-start}
 .fav h2{margin:0 0 14px;font:inherit;font-size:12px;line-height:17px;font-weight:400;color:var(--sub)}
@@ -816,6 +822,10 @@ function askField(){
   Object.assign(i,{type:'text',maxLength:200,autocomplete:'off',spellcheck:false,enterKeyHint:'send'});
   i.setAttribute('aria-label','おすすめを送る（Enter で送信）');
   Object.assign(hp,{type:'text',tabIndex:-1,autocomplete:'off'});hp.setAttribute('aria-hidden','true');
+  const w=el('span','askw'),h=el('span','askhint','enter');h.setAttribute('aria-hidden','true');
+  w.append(i,h);
+  const typed=()=>w.classList.toggle('typed',!!i.value.trim());
+  i.addEventListener('input',typed);
   i.addEventListener('keydown',e=>{
     if(e.key==='Escape'){i.blur();return}
     if(e.key!=='Enter'||e.isComposing||e.keyCode===229)return;
@@ -826,14 +836,14 @@ function askField(){
     if(t-askLast<15000){flash(i,'wait a sec');return}
     askLast=t;i.disabled=true;
     fetch(DATA.form.url,{method:'POST',mode:'no-cors',body:new URLSearchParams({[DATA.form.entry]:v})})
-      .then(()=>{i.value='';flash(i,'sent')},()=>flash(i,'failed'))
+      .then(()=>{i.value='';typed();flash(i,'sent')},()=>flash(i,'failed'))
       .finally(()=>{i.disabled=false});
   });
-  return [i,hp];
+  return [w,hp];
 }
 function flash(i,word){
-  const s=el('span','sent',word);i.after(s);i.style.display='none';
-  setTimeout(()=>{s.remove();i.style.display=''},2400);
+  const box=i.closest('.askw')||i,s=el('span','sent',word);box.after(s);box.style.display='none';
+  setTimeout(()=>{s.remove();box.style.display=''},2400);
 }
 // 中身を組む。行は visibility で隠しておき、時計で順に出す
 function build(name){
