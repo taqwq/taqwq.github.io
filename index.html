@@ -55,6 +55,12 @@ body{color:var(--fg);font-family:"M PLUS 1 Code",monospace;font-synthesis:none;-
 @media (prefers-reduced-motion:reduce){.askhint{transition:none}}
 .hp{position:absolute;left:-9999px;width:1px;height:1px;opacity:0}
 .fav{display:flex;gap:48px;align-items:flex-start}
+/* 横に並ぶときだけ、music と films のあいだに薄い縦の細線（16、taq 2026-11-18）。線は中身の横だけで、見出しの横には引かない。
+   線のないころは films が music の2列目（作者など）に見えた。線は films の見出しが出るまで出さない（中身は1行ずつ出てくるので） */
+:root:not([data-mode=phone]):not([data-narrow="1"]) .fav{gap:40px}
+:root:not([data-mode=phone]):not([data-narrow="1"]) .fav>div+div{position:relative;padding-left:40px}
+:root:not([data-mode=phone]):not([data-narrow="1"]) .fav>div+div::before{content:"";position:absolute;left:0;top:31px;bottom:0;width:1px;background:#ebe9f0}
+.fav>div+div:has(>h2[style*="hidden"])::before{visibility:hidden}
 .fav h2{margin:0 0 14px;font:inherit;font-size:12px;line-height:17px;font-weight:400;color:var(--sub)}
 .fav ul{margin:0;padding:0;list-style:none;display:grid;grid-template-columns:max-content max-content max-content;column-gap:2.5ch}
 .fav li{display:contents}
@@ -784,7 +790,7 @@ function spoken(name){
   if(name==='about')return'about: '+(DATA.about.join(' ')||'nothing yet');
   if(name==='favorites')return'favorites. music: '+DATA.music.map(j).join('; ')+'. films: '+DATA.films.map(j).join('; ')+(DATA.note.length?'. '+DATA.note.join(' '):'');
   if(name==='lately')return'lately: '+(DATA.lately.map(j).join('; ')||'nothing yet');
-  const l=DATA.links[name]||{};return name+': '+(l.id?'@'+l.id+(l.url?'. enter':''):'not yet');
+  const l=DATA.links[name]||{};return name+': '+(l.id?'@'+l.id+(l.url?'. enter':''):'nothing yet');
 }
 // 外へ開いたあと：手がかりを opened に替えて、少ししてから閉じる
 function wentOut(){
@@ -875,7 +881,7 @@ function build(name){
         a.href=l.url;a.target='_blank';a.rel='noopener noreferrer';hint=el('span','hint',touchy?'tap':'enter');p.append(a,hint);
         a.addEventListener('click',()=>{if(armed)wentOut()});   // 文字そのものを押して開いたとき（開くのはブラウザに任せる）
       }else p.append(a);
-    }else p.append(el('span','none','not yet'));
+    }else p.append(el('span','none','nothing yet'));
     panel.append(add(p,0));
   }
   return rows;

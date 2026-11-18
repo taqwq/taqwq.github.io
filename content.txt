@@ -39,8 +39,8 @@ https://docs.google.com/forms/d/e/1FAIpQLScXh9SUkyed2G8_qy8CEzqzOc2b_iI4hJqxpc2Y
 # 日付 | ひとこと。まだ何もなければ空でいい
 
 [links]
-# 名前 | ID（@ なし） | 開く URL。ID が空なら「not yet」と出て、開かない
-# x は出さない（2026-11-17）。キーの色は残して、押すと not yet
+# 名前 | ID（@ なし） | 開く URL。ID が空なら「nothing yet」と出て、開かない
+# x は出さない（2026-11-17）。キーの色は残して、押すと nothing yet（2026-11-18、not yet から変更）
 x | |
 instagram | taqwq2 | https://www.instagram.com/taqwq2/
 github | taqwq | https://github.com/taqwq
